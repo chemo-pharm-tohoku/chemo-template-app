@@ -1,0 +1,8 @@
+streamlit
+gspread
+google-auth
+openpyxl
+python-pptx
+matplotlib
+japanize-matplotlib
+lxml
