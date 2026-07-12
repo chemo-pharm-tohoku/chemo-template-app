@@ -1,6 +1,8 @@
 import streamlit as st
 import re
 import io
+import gspread
+from google.oauth2 import service_account
 from collections import defaultdict
 from openpyxl import Workbook
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
@@ -12,8 +14,7 @@ from pptx.dml.color import RGBColor
 from pptx.enum.text import PP_ALIGN
 from pptx.oxml.ns import qn
 from lxml import etree
-import urllib.request
-import csv
+
 
 st.set_page_config(
     page_title="ケモテンプレート生成システム",
@@ -21,33 +22,36 @@ st.set_page_config(
     layout="centered"
 )
 
-@st.cache_data(ttl=300)
-def fetch_sheet(filename):
-    import io
-    url = (
-        f"https://raw.githubusercontent.com/"
-        f"chemo-pharm-tohoku/chemo-template-app/"
-        f"main/{filename}"
+SPREADSHEET_URL = "https://docs.google.com/spreadsheets/d/1dLEUYSZlrIK1uHqEtEAfS1jSAPpXCIiAiAk_iaRuY-8/edit"
+
+@st.cache_resource
+def get_gspread_client():
+    creds = service_account.Credentials.from_service_account_info(
+        st.secrets["gcp_service_account"],
+        scopes=[
+            "https://spreadsheets.google.com/feeds",
+            "https://www.googleapis.com/auth/drive",
+        ]
     )
+    return gspread.authorize(creds)
+
+@st.cache_data(ttl=300)
+def fetch_sheet(sheet_name):
     try:
-        req = urllib.request.Request(
-            url,
-            headers={'User-Agent': 'Mozilla/5.0'}
-        )
-        with urllib.request.urlopen(req) as res:
-            content = res.read().decode('utf-8')
-        reader = csv.DictReader(io.StringIO(content))
-        return list(reader)
+        gc = get_gspread_client()
+        ss = gc.open_by_url(SPREADSHEET_URL)
+        ws = ss.worksheet(sheet_name)
+        return ws.get_all_records()
     except Exception as e:
-        st.error(f"ファイル「{filename}」の取得に失敗: {e}")
+        st.error(f"シート「{sheet_name}」の取得に失敗: {e}")
         return []
 
 @st.cache_data(ttl=300)
 def load_all_data():
-    basic_data  = fetch_sheet("basic.csv")
-    drug_data   = fetch_sheet("drugs.csv")
-    master_data = fetch_sheet("master.csv")
-    notes_data  = fetch_sheet("notes.csv")
+    basic_data  = fetch_sheet("基本情報")
+    drug_data   = fetch_sheet("薬剤情報")
+    master_data = fetch_sheet("薬品マスタ")
+    notes_data  = fetch_sheet("注意事項")
     return basic_data, drug_data, master_data, notes_data
 
 def to_half_kana(text):
