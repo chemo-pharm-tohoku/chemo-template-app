@@ -1127,6 +1127,15 @@ st.divider()
 with st.spinner("スプレッドシートからデータを読み込み中..."):
     basic_data, drug_data, master_data, notes_data = load_all_data()
 
+st.write(f"✅ 基本情報件数: {len(basic_data)}")
+st.write(f"✅ 薬剤情報件数: {len(drug_data)}")
+st.write(f"✅ 薬品マスタ件数: {len(master_data)}")
+st.write(f"✅ 注意事項件数: {len(notes_data)}")
+if basic_data:
+    st.write("先頭行キー:", list(basic_data[0].keys())[:5])
+else:
+    st.write("⚠️ basic_dataが空です")
+
 if not basic_data:
     st.error("データの読み込みに失敗しました。スプレッドシートの公開設定を確認してください。")
     st.stop()
