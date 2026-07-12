@@ -27,9 +27,7 @@ def fetch_sheet(filename):
     url = (
         f"https://raw.githubusercontent.com/"
         f"chemo-pharm-tohoku/chemo-template-app/"
-        f"main/%E3%82%B1%E3%83%A2%E3%83%86%E3%83%B3"
-        f"%E3%83%97%E3%83%AC%E3%83%BC%E3%83%88%E3%83%9E"
-        f"%E3%82%B9%E3%82%BF%20-%20{filename}.csv"
+        f"main/{filename}"
     )
     try:
         req = urllib.request.Request(
@@ -46,10 +44,10 @@ def fetch_sheet(filename):
 
 @st.cache_data(ttl=300)
 def load_all_data():
-    basic_data  = fetch_sheet("%E5%9F%BA%E6%9C%AC%E6%83%85%E5%A0%B1")
-    drug_data   = fetch_sheet("%E8%96%AC%E5%89%A4%E6%83%85%E5%A0%B1")
-    master_data = fetch_sheet("%E8%96%AC%E5%93%81%E3%83%9E%E3%82%B9%E3%82%BF")
-    notes_data  = fetch_sheet("%E6%B3%A8%E6%84%8F%E4%BA%8B%E9%A0%85")
+    basic_data  = fetch_sheet("basic.csv")
+    drug_data   = fetch_sheet("drugs.csv")
+    master_data = fetch_sheet("master.csv")
+    notes_data  = fetch_sheet("notes.csv")
     return basic_data, drug_data, master_data, notes_data
 
 def to_half_kana(text):
