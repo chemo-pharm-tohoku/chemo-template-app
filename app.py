@@ -25,13 +25,19 @@ SPREADSHEET_ID = "1dLEUYSZlrIK1uHqEtEAfS1jSAPpXCIiAiAk_iaRuY-8"
 
 @st.cache_data(ttl=300)
 def fetch_sheet(sheet_name):
+    import urllib.parse
+    encoded_name = urllib.parse.quote(sheet_name)
     url = (
         f"https://docs.google.com/spreadsheets/d/"
         f"{SPREADSHEET_ID}/gviz/tq?tqx=out:csv"
-        f"&sheet={sheet_name}"
+        f"&sheet={encoded_name}"
     )
     try:
-        with urllib.request.urlopen(url) as res:
+        req = urllib.request.Request(
+            url,
+            headers={'User-Agent': 'Mozilla/5.0'}
+        )
+        with urllib.request.urlopen(req) as res:
             lines = res.read().decode('utf-8').splitlines()
         reader = csv.DictReader(lines)
         return list(reader)
