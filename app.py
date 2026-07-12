@@ -14,7 +14,8 @@ from pptx.dml.color import RGBColor
 from pptx.enum.text import PP_ALIGN
 from pptx.oxml.ns import qn
 from lxml import etree
-
+import urllib.request
+import csv
 
 st.set_page_config(
     page_title="ケモテンプレート生成システム",
@@ -235,7 +236,6 @@ def create_excel(protocol_no, basic_data, drug_data,
     wb = Workbook()
     wb.remove(wb.active)
 
-    # Sheet1 入力
     ws1 = wb.create_sheet("入力")
     ws1.column_dimensions['A'].width = 24
     ws1.column_dimensions['B'].width = 18
@@ -422,7 +422,6 @@ def create_excel(protocol_no, basic_data, drug_data,
             ws1.row_dimensions[row].height = 40 if len(text) > 50 else 20
             row += 1
 
-    # Sheet2 O欄
     ws2 = wb.create_sheet("O欄")
     ws2.column_dimensions['A'].width = 70
     ws2['A1'] = '▼コピーしてカルテに貼り付けてください'
@@ -480,7 +479,6 @@ def create_excel(protocol_no, basic_data, drug_data,
     ws2['A2'].border    = BORDER_MEDIUM
     ws2.row_dimensions[2].height = 200
 
-    # Sheet3 投与量シール
     ws3 = wb.create_sheet("投与量シール")
     ws3.column_dimensions['A'].width = 50
     ws3.column_dimensions['B'].width = 18
@@ -568,7 +566,6 @@ def create_excel(protocol_no, basic_data, drug_data,
         ws3[f'A{srow}'].font = FONT_NORMAL
         srow += 1
 
-    # Sheet4 説明書
     ws4 = wb.create_sheet("説明書")
     ws4.page_setup.paperSize = 9
     ws4.page_setup.orientation = 'portrait'
@@ -869,6 +866,12 @@ def create_pptx(protocol_no, basic_data, drug_data,
             run.font.bold=bold; run.font.color.rgb=color
         return txBox
 
+    def safe_float(val):
+        try:
+            return float(val) if str(val).strip() != '' else 0
+        except:
+            return 0
+
     seal_notes = sorted(
         [n for n in notes_data
          if str(n.get('区分',''))=='外来手帳シール'
@@ -919,16 +922,15 @@ def create_pptx(protocol_no, basic_data, drug_data,
 
     rp_all_groups = defaultdict(list)
     for drug in drugs:
-        rp = str(drug.get('投与順序', ''))
+        rp = str(drug.get('投与順序',''))
         if rp != '内服':
             rp_all_groups[rp].append(drug)
 
-    def safe_float(val):
-        try:
-            return float(val) if val != '' else 0
-        except:
-            return 0
-
+    total_min = int(sum(
+        max((safe_float(d.get('投与時間数値', 0))
+             for d in rp_drugs), default=0)
+        for rp_drugs in rp_all_groups.values()
+    ) * 60)
 
     def get_rp_info(rp_drugs):
         rp_sorted = sorted(rp_drugs,
@@ -1129,16 +1131,13 @@ def create_pptx(protocol_no, basic_data, drug_data,
     return output.getvalue()
 
 
-# ================================
 # Streamlit UI
-# ================================
 st.title("💊 ケモテンプレート生成システム")
 st.caption("東北大学病院 薬剤部")
 st.divider()
 
 with st.spinner("スプレッドシートからデータを読み込み中..."):
     basic_data, drug_data, master_data, notes_data = load_all_data()
-
 
 if not basic_data:
     st.error("データの読み込みに失敗しました。スプレッドシートの公開設定を確認してください。")
