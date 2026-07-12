@@ -1149,11 +1149,10 @@ selected = st.selectbox(
     index=0
 )
 
-if selected and '　' in selected:
-    protocol_no = selected.split('　')[0].strip()
-else:
-    st.error("レジメンの選択に失敗しました。")
+if selected is None:
     st.stop()
+
+protocol_no = selected.split('　')[0].strip()
 
 selected_basic = next(
     (b for b in basic_data if b['プロトコールNo'] == protocol_no),
