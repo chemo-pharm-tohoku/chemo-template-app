@@ -921,8 +921,15 @@ def create_pptx(protocol_no, basic_data, drug_data,
     for drug in drugs:
         rp = str(drug.get('投与順序',''))
         if rp != '内服': rp_all_groups[rp].append(drug)
+       def safe_float(val):
+        try:
+            return float(val) if val != '' else 0
+        except:
+            return 0
+
     total_min = int(sum(
-        max((float(d.get('投与時間数値',0) or 0) for d in rp_drugs), default=0)
+        max((safe_float(d.get('投与時間数値', 0))
+             for d in rp_drugs), default=0)
         for rp_drugs in rp_all_groups.values()
     ) * 60)
 
