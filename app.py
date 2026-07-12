@@ -21,16 +21,15 @@ st.set_page_config(
     layout="centered"
 )
 
-SPREADSHEET_ID = "1dLEUYSZlrIK1uHqEtEAfS1jSAPpXCIiAiAk_iaRuY-8"
-
 @st.cache_data(ttl=300)
-def fetch_sheet(sheet_name):
-    import urllib.parse
-    encoded_name = urllib.parse.quote(sheet_name)
+def fetch_sheet(filename):
+    import io
     url = (
-        f"https://docs.google.com/spreadsheets/d/"
-        f"{SPREADSHEET_ID}/gviz/tq?tqx=out:csv"
-        f"&sheet={encoded_name}"
+        f"https://raw.githubusercontent.com/"
+        f"chemo-pharm-tohoku/chemo-template-app/"
+        f"main/%E3%82%B1%E3%83%A2%E3%83%86%E3%83%B3"
+        f"%E3%83%97%E3%83%AC%E3%83%BC%E3%83%88%E3%83%9E"
+        f"%E3%82%B9%E3%82%BF%20-%20{filename}.csv"
     )
     try:
         req = urllib.request.Request(
@@ -38,19 +37,19 @@ def fetch_sheet(sheet_name):
             headers={'User-Agent': 'Mozilla/5.0'}
         )
         with urllib.request.urlopen(req) as res:
-            lines = res.read().decode('utf-8').splitlines()
-        reader = csv.DictReader(lines)
+            content = res.read().decode('utf-8')
+        reader = csv.DictReader(io.StringIO(content))
         return list(reader)
     except Exception as e:
-        st.error(f"シート「{sheet_name}」の取得に失敗: {e}")
+        st.error(f"ファイル「{filename}」の取得に失敗: {e}")
         return []
 
 @st.cache_data(ttl=300)
 def load_all_data():
-    basic_data  = fetch_sheet("基本情報")
-    drug_data   = fetch_sheet("薬剤情報")
-    master_data = fetch_sheet("薬品マスタ")
-    notes_data  = fetch_sheet("注意事項")
+    basic_data  = fetch_sheet("%E5%9F%BA%E6%9C%AC%E6%83%85%E5%A0%B1")
+    drug_data   = fetch_sheet("%E8%96%AC%E5%89%A4%E6%83%85%E5%A0%B1")
+    master_data = fetch_sheet("%E8%96%AC%E5%93%81%E3%83%9E%E3%82%B9%E3%82%BF")
+    notes_data  = fetch_sheet("%E6%B3%A8%E6%84%8F%E4%BA%8B%E9%A0%85")
     return basic_data, drug_data, master_data, notes_data
 
 def to_half_kana(text):
