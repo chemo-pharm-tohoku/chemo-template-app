@@ -917,11 +917,12 @@ def create_pptx(protocol_no, basic_data, drug_data,
     need_bsa = any(str(d.get('用量根拠',''))=='BSA依存'
                    for d in drugs if str(d.get('①O欄_抗がん剤',''))=='○')
 
-    rp_all_groups = defaultdict(list)
+   rp_all_groups = defaultdict(list)
     for drug in drugs:
         rp = str(drug.get('投与順序',''))
         if rp != '内服': rp_all_groups[rp].append(drug)
-       def safe_float(val):
+
+    def safe_float(val):
         try:
             return float(val) if val != '' else 0
         except:
@@ -932,6 +933,7 @@ def create_pptx(protocol_no, basic_data, drug_data,
              for d in rp_drugs), default=0)
         for rp_drugs in rp_all_groups.values()
     ) * 60)
+
 
     def get_rp_info(rp_drugs):
         rp_sorted = sorted(rp_drugs,
