@@ -22,9 +22,13 @@ st.set_page_config(
 )
 
 @st.cache_data(ttl=300)
-def fetch_drive_csv(file_id):
+def fetch_sheet(filename):
     import io
-    url = f"https://drive.google.com/uc?export=download&id={file_id}"
+    url = (
+        f"https://raw.githubusercontent.com/"
+        f"chemo-pharm-tohoku/chemo-template-app/"
+        f"main/{filename}"
+    )
     try:
         req = urllib.request.Request(
             url,
@@ -35,15 +39,15 @@ def fetch_drive_csv(file_id):
         reader = csv.DictReader(io.StringIO(content))
         return list(reader)
     except Exception as e:
-        st.error(f"データの取得に失敗: {e}")
+        st.error(f"ファイル「{filename}」の取得に失敗: {e}")
         return []
 
 @st.cache_data(ttl=300)
 def load_all_data():
-    basic_data  = fetch_drive_csv("16h3V-bzYYjoQJ1k8Cp9a5V8qHOlKibVz")
-    drug_data   = fetch_drive_csv("1jnHiJPWLd95E7GiV-RO9X5oR5e9TzavX")
-    master_data = fetch_drive_csv("1f7s99bg9nFA_y5f3tVdFfLD_ms7oYgeZ")
-    notes_data  = fetch_drive_csv("1yVAcVlw2MgeOtnn-C-KO0hX1eDsw4tfi")
+    basic_data  = fetch_sheet("basic.csv")
+    drug_data   = fetch_sheet("drugs.csv")
+    master_data = fetch_sheet("master.csv")
+    notes_data  = fetch_sheet("notes.csv")
     return basic_data, drug_data, master_data, notes_data
 
 def to_half_kana(text):
@@ -1127,14 +1131,6 @@ st.divider()
 with st.spinner("スプレッドシートからデータを読み込み中..."):
     basic_data, drug_data, master_data, notes_data = load_all_data()
 
-st.write(f"✅ 基本情報件数: {len(basic_data)}")
-st.write(f"✅ 薬剤情報件数: {len(drug_data)}")
-st.write(f"✅ 薬品マスタ件数: {len(master_data)}")
-st.write(f"✅ 注意事項件数: {len(notes_data)}")
-if basic_data:
-    st.write("先頭行キー:", list(basic_data[0].keys())[:5])
-else:
-    st.write("⚠️ basic_dataが空です")
 
 if not basic_data:
     st.error("データの読み込みに失敗しました。スプレッドシートの公開設定を確認してください。")
