@@ -1134,16 +1134,26 @@ if not basic_data:
 regimen_list = [
     f"{b['プロトコールNo']}　{b['レジメン名']}"
     for b in basic_data
-    if b.get('プロトコールNo','')
+    if b.get('プロトコールNo','').strip()
 ]
 
 st.subheader("📋 レジメン選択")
+
+if not regimen_list:
+    st.error("レジメン一覧が取得できませんでした。")
+    st.stop()
+
 selected = st.selectbox(
     "生成するレジメンを選択してください",
     options=regimen_list,
     index=0
 )
-protocol_no = selected.split('　')[0].strip()
+
+if selected and '　' in selected:
+    protocol_no = selected.split('　')[0].strip()
+else:
+    st.error("レジメンの選択に失敗しました。")
+    st.stop()
 
 selected_basic = next(
     (b for b in basic_data if b['プロトコールNo'] == protocol_no),
