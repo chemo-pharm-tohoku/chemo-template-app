@@ -20,7 +20,8 @@ import csv
 st.set_page_config(
     page_title="ケモテンプレート生成システム",
     page_icon="💊",
-    layout="centered"
+    layout="centered",
+    initial_sidebar_state="expanded"  # ← この1行を追加
 )
 
 SPREADSHEET_URL = "https://docs.google.com/spreadsheets/d/1dLEUYSZlrIK1uHqEtEAfS1jSAPpXCIiAiAk_iaRuY-8/edit"
