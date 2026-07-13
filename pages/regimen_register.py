@@ -4,7 +4,6 @@ from google.oauth2.service_account import Credentials
 import json
 from datetime import date, datetime
 
-st.set_page_config(page_title="レジメン登録", page_icon="💊")
 st.title("💊 レジメン登録")
 st.caption("NotebookLMで抽出したJSONを貼り付けて登録してください")
 
