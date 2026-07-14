@@ -5,8 +5,23 @@ import json
 from datetime import date, datetime
 
 st.title("💊 レジメン登録")
-st.caption("NotebookLMで抽出したJSONを貼り付けて登録してください")
+st.caption("東北大学病院 薬剤部")
+st.divider()
 
+st.subheader("📋 STEP1：NotebookLMで抽出")
+st.info("""
+**以下の手順でJSONを取得してください**
+1. NotebookLMを開く
+2. 下の指示文をコピーしてチャットに貼り付ける
+3. 出力されたJSONをコピーする
+""")
+
+st.code("""「プロトコールNo」のPDFを定義書のルールに従って抽出してください。
+パターン判定から始め、JSON形式で出力してください。
+薬品マスタと照合して管理コードも記入してください。""", language=None)
+
+st.subheader("📝 STEP2：JSONを貼り付けて登録")
+st.divider()
 # ===== 認証 =====
 @st.cache_resource
 def get_spreadsheet():
