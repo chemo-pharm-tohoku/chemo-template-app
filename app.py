@@ -18,10 +18,13 @@ import urllib.request
 import csv
 
 st.set_page_config(
+    # サイドバーのページ名を設定
+    st.sidebar.title("メニュー")
     page_title="ケモテンプレート生成システム",
     page_icon="💊",
     layout="centered",
-    initial_sidebar_state="expanded"  # ← この1行を追加
+    initial_sidebar_state="expanded",
+    menu_items={}
 )
 
 SPREADSHEET_URL = "https://docs.google.com/spreadsheets/d/1dLEUYSZlrIK1uHqEtEAfS1jSAPpXCIiAiAk_iaRuY-8/edit"
