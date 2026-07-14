@@ -14,7 +14,7 @@ with col1:
 
 NotebookLMを使って
 レジメンPDFから
-JSONデータを自動抽出
+データを自動抽出
 """)
     st.page_link(
         "pages/1_レジメン情報抽出.py",
