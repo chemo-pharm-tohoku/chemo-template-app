@@ -8,18 +8,9 @@ st.title("💊 レジメン登録")
 st.caption("東北大学病院 薬剤部")
 st.divider()
 
-col1, col2 = st.columns([3, 1])
-with col1:
-    st.markdown("📋 JSONの取得はこちら")
-with col2:
-    st.page_link(
-        "pages/1_レジメン情報抽出.py",
-        label="レジメン情報抽出ページへ",
-        icon="📋"
-    )
+st.markdown("#### 📋 JSONの取得はこちら　→　[レジメン情報抽出ページへ](./レジメン情報抽出)")
 
 st.divider()
-
 
 # ===== 認証 =====
 @st.cache_resource
