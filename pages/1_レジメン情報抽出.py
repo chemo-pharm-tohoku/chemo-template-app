@@ -36,16 +36,14 @@ with col3:
 下のボタンからダウンロード
 して追加
 """)
-
-# 抽出定義書ダウンロード
-with open("NotebookLM 抽出定義書260712.txt", "rb") as f:
-    st.download_button(
-        label="📥 抽出定義書をダウンロード",
-        data=f,
-        file_name="ケモテンプレート抽出定義書.txt",
-        mime="text/plain"
-    )
-
+    with open("NotebookLM 抽出定義書260712.txt", "rb") as f:
+        st.download_button(
+            label="📥 抽出定義書をダウンロード",
+            data=f,
+            file_name="ケモテンプレート抽出定義書.txt",
+            mime="text/plain"
+        )
+        
 st.divider()
 
 # ===== STEP2 =====
