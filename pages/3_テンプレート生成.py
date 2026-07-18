@@ -1143,8 +1143,8 @@ def create_pptx(protocol_no, basic_data, drug_data,
 
 
 # Streamlit UI
-st.title("💊 ケモテンプレート生成システム")
-st.caption("東北大学病院 薬剤部")
+st.title("💊 テンプレート生成")
+st.caption("登録済みレジメンから Excel・パワポを 生成")
 st.divider()
 
 with st.spinner("スプレッドシートからデータを読み込み中..."):
