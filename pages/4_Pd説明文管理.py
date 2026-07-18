@@ -11,12 +11,28 @@ st.divider()
 # ===== 認証 =====
 @st.cache_resource
 def get_spreadsheet():
-    # ===== Pdカテゴリ紐付けセクション =====
-st.divider()
-st.subheader("🔗 レジメンへのPdカテゴリ紐付け")
-st.caption("レジメンに使用するPdカテゴリを選択して保存します。")
+    scopes = [
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive",
+    ]
+    creds = Credentials.from_service_account_info(
+        st.secrets["gcp_service_account"],
+        scopes=scopes
+    )
+    gc = gspread.authorize(creds)
+    sh = gc.open_by_url(st.secrets["spreadsheet"]["url"])
+    return sh
 
-# ===== 基本情報・薬剤情報の読み込み =====
+@st.cache_data(ttl=60)
+def load_pd_data():
+    try:
+        sh = get_spreadsheet()
+        ws = sh.worksheet("Pd")
+        return ws.get_all_records()
+    except Exception as e:
+        st.error(f"データの取得に失敗しました: {e}")
+        return []
+
 @st.cache_data(ttl=60)
 def load_basic_data():
     try:
@@ -47,174 +63,11 @@ def load_master_data():
         st.error(f"薬品マスタの取得に失敗しました: {e}")
         return []
 
-basic_data  = load_basic_data()
-drug_data   = load_drug_data()
-master_data = load_master_data()
-
-if not basic_data:
-    st.warning("基本情報が取得できませんでした。")
-else:
-    # レジメン選択
-    regimen_list = [
-        f"{b['プロトコールNo']}　{b['レジメン名']}"
-        for b in basic_data
-        if b.get('プロトコールNo', '').strip()
-    ]
-    selected_regimen = st.selectbox(
-        "レジメンを選択してください",
-        options=regimen_list,
-        key="regimen_select_pd"
-    )
-    protocol_no = selected_regimen.split('　')[0].strip()
-
-    # 選択中レジメンの薬剤情報を取得
-    regimen_drugs = [
-        d for d in drug_data
-        if str(d.get('プロトコールNo', '')) == protocol_no
-    ]
-
-    # 薬品マスタをdict化
-    master_dict = {
-        str(m['管理コード']): m for m in master_data
-    }
-
-    # ===== トリガー照合でおすすめ判定 =====
-    def is_recommended(pd_item, regimen_drugs, master_dict):
-        trigger_str = str(pd_item.get("トリガーキーワード", ""))
-        if trigger_str in ("", "手動設定", "全レジメン共通"):
-            return trigger_str == "全レジメン共通"
-        triggers = [t.strip() for t in trigger_str.split("|") if t.strip()]
-        for drug in regimen_drugs:
-            code   = str(drug.get('管理コード', ''))
-            master = master_dict.get(code, {})
-            # 照合対象：薬効分類・薬剤区分・支持療法分類・商品名・一般名
-            targets = " ".join([
-                str(master.get('薬効分類', '')),
-                str(master.get('薬剤区分', '')),
-                str(master.get('支持療法分類', '')),
-                str(master.get('採用商品名（全角）', '')),
-                str(master.get('一般名（全角）', '')),
-                str(drug.get('商品名', '')),
-            ])
-            for trigger in triggers:
-                if trigger in targets:
-                    return True
-        return False
-
-    # ===== 既存の紐付けを取得 =====
-    selected_basic = next(
-        (b for b in basic_data
-         if b['プロトコールNo'] == protocol_no), {}
-    )
-    existing_cats_str = str(selected_basic.get('Pdカテゴリ', ''))
-    existing_cats = [
-        c.strip() for c in existing_cats_str.split('|')
-        if c.strip()
-    ]
-
-    st.markdown(f"**選択中：{protocol_no}　{selected_basic.get('レジメン名','')}**")
-
-    if existing_cats:
-        st.info(f"現在の設定：{' | '.join(existing_cats)}")
-    else:
-        st.info("現在、Pdカテゴリは未設定です。")
-
-    # ===== カテゴリ選択UI =====
-    st.markdown("#### カテゴリを選択してください")
-    selected_cats = []
-
-    for kind, kind_label in [
-        ("A", "🟢 A：標準説明文"),
-        ("B", "🟡 B：副作用発現時"),
-        ("C", "🔵 C：薬剤固有注意"),
-    ]:
-        kind_items = [d for d in pd_data if get_kind(d) == kind]
-        if not kind_items:
-            continue
-
-        st.markdown(f"**{kind_label}**")
-        for item in sort_items(kind_items):
-            cat_id   = str(item.get('カテゴリID', ''))
-            cat_name = str(item.get('カテゴリ名', ''))
-            recommended = is_recommended(item, regimen_drugs, master_dict)
-
-            # デフォルトON判定：おすすめ or 既存設定にある
-            default_val = recommended or (cat_id in existing_cats)
-
-            label = (
-                f"⭐ {cat_id}　{cat_name}  ← おすすめ"
-                if recommended
-                else f"　　{cat_id}　{cat_name}"
-            )
-            checked = st.checkbox(
-                label,
-                value=default_val,
-                key=f"cat_{protocol_no}_{cat_id}"
-            )
-            if checked:
-                selected_cats.append(cat_id)
-
-        st.markdown("---")
-
-    # ===== 保存ボタン =====
-    if st.button("✅ 紐付けを保存する", type="primary"):
-        try:
-            sh = get_spreadsheet()
-            ws_basic   = sh.worksheet("基本情報")
-            all_values = ws_basic.get_all_values()
-            headers    = all_values[0]
-
-            # Pdカテゴリ列のインデックスを取得
-            if 'Pdカテゴリ' not in headers:
-                st.error("❌ 基本情報シートに「Pdカテゴリ」列がありません。")
-            else:
-                pd_col_idx = headers.index('Pdカテゴリ') + 1
-                # プロトコールNo列でrow検索
-                protocol_col = [row[0] for row in all_values]
-                if protocol_no in protocol_col:
-                    row_idx   = protocol_col.index(protocol_no) + 1
-                    new_value = '|'.join(selected_cats)
-                    ws_basic.update_cell(row_idx, pd_col_idx, new_value)
-
-                    # キャッシュクリア
-                    load_basic_data.clear()
-
-                    st.success(
-                        f"✅ {protocol_no} のPdカテゴリを保存しました！\n\n"
-                        f"設定内容：{new_value if new_value else '（なし）'}"
-                    )
-                else:
-                    st.error(f"❌ {protocol_no} が基本情報シートに見つかりません。")
-        except Exception as e:
-            st.error(f"❌ 保存に失敗しました: {e}")
-            
-    scopes = [
-        "https://www.googleapis.com/auth/spreadsheets",
-        "https://www.googleapis.com/auth/drive",
-    ]
-    creds = Credentials.from_service_account_info(
-        st.secrets["gcp_service_account"],
-        scopes=scopes
-    )
-    gc = gspread.authorize(creds)
-    sh = gc.open_by_url(st.secrets["spreadsheet"]["url"])
-    return sh
-
-@st.cache_data(ttl=60)
-def load_pd_data():
-    try:
-        sh = get_spreadsheet()
-        ws = sh.worksheet("Pd")
-        return ws.get_all_records()
-    except Exception as e:
-        st.error(f"データの取得に失敗しました: {e}")
-        return []
-
 # ===== 種別をIDから取得 =====
 def get_kind(item):
     cat_id = str(item.get("カテゴリID", ""))
     if len(cat_id) >= 3:
-        return cat_id[2]  # PDA→A / PDB→B / PDC→C
+        return cat_id[2]
     return str(item.get("種別", ""))
 
 # ===== 次のIDを自動採番 =====
@@ -250,7 +103,7 @@ KIND_OPTIONS = {
     "C：薬剤固有注意": "C",
 }
 
-# ===== メイン =====
+# ===== 凡例 =====
 st.markdown("""
 | 種別 | 意味 |
 |------|------|
@@ -262,135 +115,149 @@ st.divider()
 
 # ===== データ読み込み =====
 with st.spinner("データを読み込み中..."):
-    pd_data = load_pd_data()
+    pd_data     = load_pd_data()
+    basic_data  = load_basic_data()
+    drug_data   = load_drug_data()
+    master_data = load_master_data()
 
+# ===== Pdカテゴリ紐付けセクション =====
+st.subheader("🔗 レジメンへのPdカテゴリ紐付け")
+st.caption("レジメンに使用するPdカテゴリを選択して保存します。")
+
+if not basic_data:
+    st.warning("基本情報が取得できませんでした。")
+else:
+    regimen_list = [
+        f"{b['プロトコールNo']}　{b['レジメン名']}"
+        for b in basic_data
+        if b.get('プロトコールNo', '').strip()
+    ]
+    selected_regimen = st.selectbox(
+        "レジメンを選択してください",
+        options=regimen_list,
+        key="regimen_select_pd"
+    )
+    protocol_no = selected_regimen.split('　')[0].strip()
+
+    regimen_drugs = [
+        d for d in drug_data
+        if str(d.get('プロトコールNo', '')) == protocol_no
+    ]
+    master_dict = {
+        str(m['管理コード']): m for m in master_data
+    }
+
+    def is_recommended(pd_item, regimen_drugs, master_dict):
+        trigger_str = str(pd_item.get("トリガーキーワード", ""))
+        if trigger_str in ("", "手動設定", "全レジメン共通"):
+            return trigger_str == "全レジメン共通"
+        triggers = [t.strip() for t in trigger_str.split("|") if t.strip()]
+        for drug in regimen_drugs:
+            code   = str(drug.get('管理コード', ''))
+            master = master_dict.get(code, {})
+            targets = " ".join([
+                str(master.get('薬効分類', '')),
+                str(master.get('薬剤区分', '')),
+                str(master.get('支持療法分類', '')),
+                str(master.get('採用商品名（全角）', '')),
+                str(master.get('一般名（全角）', '')),
+                str(drug.get('商品名', '')),
+            ])
+            for trigger in triggers:
+                if trigger in targets:
+                    return True
+        return False
+
+    selected_basic_pd = next(
+        (b for b in basic_data
+         if b['プロトコールNo'] == protocol_no), {}
+    )
+    existing_cats_str = str(selected_basic_pd.get('Pdカテゴリ', ''))
+    existing_cats = [
+        c.strip() for c in existing_cats_str.split('|')
+        if c.strip()
+    ]
+
+    st.markdown(
+        f"**選択中：{protocol_no}　"
+        f"{selected_basic_pd.get('レジメン名','')}**"
+    )
+    if existing_cats:
+        st.info(f"現在の設定：{' | '.join(existing_cats)}")
+    else:
+        st.info("現在、Pdカテゴリは未設定です。")
+
+    st.markdown("#### カテゴリを選択してください")
+    selected_cats = []
+
+    for kind, kind_label in [
+        ("A", "🟢 A：標準説明文"),
+        ("B", "🟡 B：副作用発現時"),
+        ("C", "🔵 C：薬剤固有注意"),
+    ]:
+        kind_items = [d for d in pd_data if get_kind(d) == kind]
+        if not kind_items:
+            continue
+        st.markdown(f"**{kind_label}**")
+        for item in sorted(
+            kind_items,
+            key=lambda x: int(x.get("優先順位", 99))
+            if str(x.get("優先順位", "")).isdigit() else 99
+        ):
+            cat_id   = str(item.get('カテゴリID', ''))
+            cat_name = str(item.get('カテゴリ名', ''))
+            recommended = is_recommended(item, regimen_drugs, master_dict)
+            default_val = recommended or (cat_id in existing_cats)
+            label = (
+                f"⭐ {cat_id}　{cat_name}  ← おすすめ"
+                if recommended
+                else f"　　{cat_id}　{cat_name}"
+            )
+            checked = st.checkbox(
+                label,
+                value=default_val,
+                key=f"cat_{protocol_no}_{cat_id}"
+            )
+            if checked:
+                selected_cats.append(cat_id)
+        st.markdown("---")
+
+    if st.button("✅ 紐付けを保存する", type="primary"):
+        try:
+            sh = get_spreadsheet()
+            ws_basic   = sh.worksheet("基本情報")
+            all_values = ws_basic.get_all_values()
+            headers    = all_values[0]
+            if 'Pdカテゴリ' not in headers:
+                st.error("❌ 基本情報シートに「Pdカテゴリ」列がありません。")
+            else:
+                pd_col_idx   = headers.index('Pdカテゴリ') + 1
+                protocol_col = [row[0] for row in all_values]
+                if protocol_no in protocol_col:
+                    row_idx   = protocol_col.index(protocol_no) + 1
+                    new_value = '|'.join(selected_cats)
+                    ws_basic.update_cell(row_idx, pd_col_idx, new_value)
+                    load_basic_data.clear()
+                    st.success(
+                        f"✅ {protocol_no} のPdカテゴリを保存しました！\n\n"
+                        f"設定内容：{new_value if new_value else '（なし）'}"
+                    )
+                else:
+                    st.error(
+                        f"❌ {protocol_no} が基本情報シートに見つかりません。"
+                    )
+        except Exception as e:
+            st.error(f"❌ 保存に失敗しました: {e}")
+
+st.divider()
+
+# ===== 説明文一覧 =====
 if not pd_data:
     st.warning("Pdシートにデータがありません。")
     st.stop()
 
-# ===== 新規追加ボタン =====
-st.divider()
-st.subheader("➕ 新規説明文を追加する")
-if st.button("➕ 追加フォームを開く", type="primary"):
-    st.session_state["show_add_form"] = True
-
-# ===== 新規追加フォーム =====
-if st.session_state.get("show_add_form", False):
-    st.divider()
-    st.subheader("➕ 新規説明文の追加")
-
-    with st.form("add_pd_form"):
-
-        # 種別選択（先に選ぶとIDが自動で決まる）
-        kind_label = st.selectbox(
-            "種別 *",
-            options=list(KIND_OPTIONS.keys()),
-        )
-        kind_key = KIND_OPTIONS[kind_label]
-
-        # 自動採番したIDを初期値として表示
-        auto_id = get_next_id(pd_data, kind_key)
-        cat_id = st.text_input(
-            "カテゴリID *",
-            value=auto_id,
-            help="自動採番されます。変更も可能です。"
-        )
-
-        cat_name = st.text_input(
-            "カテゴリ名 *",
-            placeholder="例：irAE全般、下痢発現時"
-        )
-
-        trigger = st.text_input(
-            "トリガーキーワード",
-            placeholder="例：抗PD-1|抗PD-L1　（複数はパイプ区切り）",
-            help="自動判定に使用するキーワード。手動設定の場合は空欄でも可。"
-        )
-
-        description = st.text_area(
-            "説明文 *",
-            height=150,
-            placeholder="例：irAEは発現時期や重症度、発現部位などに個人差があります…"
-        )
-
-        priority = st.number_input(
-            "優先順位",
-            min_value=1,
-            max_value=999,
-            value=99,
-            help="数値が小さいほど上に表示されます"
-        )
-
-        note = st.text_input(
-            "備考",
-            placeholder="任意"
-        )
-
-        col1, col2 = st.columns(2)
-        with col1:
-            submitted = st.form_submit_button(
-                "✅ 登録する",
-                type="primary",
-                use_container_width=True
-            )
-        with col2:
-            cancelled = st.form_submit_button(
-                "❌ キャンセル",
-                use_container_width=True
-            )
-
-    # ===== キャンセル =====
-    if cancelled:
-        st.session_state["show_add_form"] = False
-        st.rerun()
-
-    # ===== 登録処理 =====
-    if submitted:
-        # バリデーション
-        errors = []
-        if not cat_id.strip():
-            errors.append("カテゴリIDを入力してください")
-        if not cat_name.strip():
-            errors.append("カテゴリ名を入力してください")
-        if not description.strip():
-            errors.append("説明文を入力してください")
-
-        # ID重複チェック
-        existing_ids = [str(d.get("カテゴリID", "")) for d in pd_data]
-        if cat_id.strip() in existing_ids:
-            errors.append(f"カテゴリID「{cat_id}」はすでに存在します")
-
-        if errors:
-            for e in errors:
-                st.error(f"❌ {e}")
-        else:
-            try:
-                sh = get_spreadsheet()
-                ws = sh.worksheet("Pd")
-                new_row = [
-                    cat_id.strip(),
-                    cat_name.strip(),
-                    kind_key,
-                    trigger.strip(),
-                    description.strip(),
-                    priority,
-                    note.strip(),
-                ]
-                ws.append_row(new_row, value_input_option="USER_ENTERED")
-
-                st.success(f"✅ 「{cat_name}」を登録しました！")
-                st.session_state["show_add_form"] = False
-                # キャッシュクリアして再読み込み
-                load_pd_data.clear()
-                st.rerun()
-
-            except Exception as e:
-                st.error(f"❌ 登録に失敗しました: {e}")
-
-    st.divider()
-
 # ===== 絞り込みフィルター =====
-st.subheader("🔍 絞り込み")
+st.subheader("🔍 説明文一覧")
 col1, col2 = st.columns(2)
 with col1:
     kind_options = ["すべて", "A：標準説明文", "B：副作用発現時", "C：薬剤固有注意"]
@@ -401,7 +268,6 @@ with col2:
         placeholder="カテゴリ名・説明文で検索"
     )
 
-# ===== フィルタリング =====
 filtered = pd_data
 if selected_kind != "すべて":
     kind_key = selected_kind[0]
@@ -413,14 +279,10 @@ if search_word:
         or search_word in str(d.get("説明文", ""))
     ]
 
-st.divider()
-
-# ===== 件数表示 =====
 total = len(pd_data)
 shown = len(filtered)
 st.caption(f"全{total}件中　{shown}件表示")
 
-# ===== Expander表示の共通関数 =====
 def show_item(item):
     kind = get_kind(item)
     with st.expander(
@@ -455,7 +317,6 @@ def sort_items(items):
         if str(x.get("優先順位", "")).isdigit() else 99
     )
 
-# ===== 種別ごとにタブ表示 =====
 if selected_kind == "すべて" and not search_word:
     tab_a, tab_b, tab_c = st.tabs([
         "🟢 A：標準説明文",
@@ -479,6 +340,102 @@ else:
             show_item(item)
 
 st.divider()
-PD_SHEET_URL = f"{st.secrets['spreadsheet']['url']}#gid=224247887"
-st.markdown(f"[📊 スプレッドシートを直接編集する（Pdシート）]({PD_SHEET_URL})")
+
+# ===== 新規追加 =====
+st.subheader("➕ 新規説明文を追加する")
+
+if st.button("➕ 追加フォームを開く", type="primary"):
+    st.session_state["show_add_form"] = True
+
+if st.session_state.get("show_add_form", False):
+    with st.form("add_pd_form"):
+        kind_label = st.selectbox(
+            "種別 *",
+            options=list(KIND_OPTIONS.keys()),
+        )
+        kind_key = KIND_OPTIONS[kind_label]
+        auto_id  = get_next_id(pd_data, kind_key)
+        cat_id   = st.text_input(
+            "カテゴリID *",
+            value=auto_id,
+            help="自動採番されます。変更も可能です。"
+        )
+        cat_name = st.text_input(
+            "カテゴリ名 *",
+            placeholder="例：irAE全般、下痢発現時"
+        )
+        trigger = st.text_input(
+            "トリガーキーワード",
+            placeholder="例：抗PD-1|抗PD-L1　（複数はパイプ区切り）",
+            help="自動判定に使用するキーワード。手動設定の場合は空欄でも可。"
+        )
+        description = st.text_area(
+            "説明文 *",
+            height=150,
+            placeholder="例：irAEは発現時期や重症度、発現部位などに個人差があります…"
+        )
+        priority = st.number_input(
+            "優先順位",
+            min_value=1, max_value=999, value=99,
+            help="数値が小さいほど上に表示されます"
+        )
+        note = st.text_input("備考", placeholder="任意")
+
+        col1, col2 = st.columns(2)
+        with col1:
+            submitted = st.form_submit_button(
+                "✅ 登録する",
+                type="primary",
+                use_container_width=True
+            )
+        with col2:
+            cancelled = st.form_submit_button(
+                "❌ キャンセル",
+                use_container_width=True
+            )
+
+    if cancelled:
+        st.session_state["show_add_form"] = False
+        st.rerun()
+
+    if submitted:
+        errors = []
+        if not cat_id.strip():
+            errors.append("カテゴリIDを入力してください")
+        if not cat_name.strip():
+            errors.append("カテゴリ名を入力してください")
+        if not description.strip():
+            errors.append("説明文を入力してください")
+        existing_ids = [str(d.get("カテゴリID", "")) for d in pd_data]
+        if cat_id.strip() in existing_ids:
+            errors.append(f"カテゴリID「{cat_id}」はすでに存在します")
+        if errors:
+            for e in errors:
+                st.error(f"❌ {e}")
+        else:
+            try:
+                sh = get_spreadsheet()
+                ws = sh.worksheet("Pd")
+                new_row = [
+                    cat_id.strip(),
+                    cat_name.strip(),
+                    kind_key,
+                    trigger.strip(),
+                    description.strip(),
+                    priority,
+                    note.strip(),
+                ]
+                ws.append_row(new_row, value_input_option="USER_ENTERED")
+                st.success(f"✅ 「{cat_name}」を登録しました！")
+                st.session_state["show_add_form"] = False
+                load_pd_data.clear()
+                st.rerun()
+            except Exception as e:
+                st.error(f"❌ 登録に失敗しました: {e}")
+
+st.divider()
+st.markdown(
+    f"[📊 スプレッドシートを直接編集する]"
+    f"({st.secrets['spreadsheet']['url']})"
+)
 st.caption("※ 追加後はページを再読み込みすると反映されます")
