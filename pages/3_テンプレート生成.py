@@ -1481,7 +1481,13 @@ if selected_basic:
                 st.rerun()
     else:
         st.success(f"✅ Pdカテゴリ設定済み：{pd_cats}")
-
+# ===== Pdカテゴリ設定済み表示の直後に追加 =====
+    else:
+        st.success(f"✅ Pdカテゴリ設定済み：{pd_cats}")
+        # ===== 追加：Pd設定直後にキャッシュクリアできるボタン =====
+        if st.button("🔄 データを最新化する", help="Pd設定後はこちらを押してください"):
+            st.cache_data.clear()
+            st.rerun()
 st.divider()
 st.subheader("📁 ファイル生成")
 
