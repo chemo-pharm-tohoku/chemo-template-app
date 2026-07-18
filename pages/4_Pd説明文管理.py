@@ -344,6 +344,11 @@ st.divider()
 # ===== 新規追加 =====
 st.subheader("➕ 新規説明文を追加する")
 
+st.markdown(
+    "📖 [登録マニュアルを見る（Googleスライド）]"
+    "(https://docs.google.com/presentation/d/1HKOvWIgBHi5v_ZktWOioiw9x54j38BHi4mmZVicI6mM/edit?slide=id.p1#slide=id.p1)"
+)
+
 if st.button("➕ 追加フォームを開く", type="primary"):
     st.session_state["show_add_form"] = True
 
