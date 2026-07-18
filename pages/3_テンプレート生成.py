@@ -1186,7 +1186,182 @@ if selected_basic:
     col1.metric("プロトコールNo", protocol_no)
     col2.metric("1コース日数", f"{selected_basic.get('1コース日数','?')}日")
     col3.metric("対象疾患", selected_basic.get('対象疾患','?'))
+# ===== Pdカテゴリ紐付けセクション =====
+st.divider()
+st.subheader("🔗 レジメンへのPdカテゴリ紐付け")
+st.caption("レジメンに使用するPdカテゴリを選択して保存します。")
 
+# ===== 基本情報・薬剤情報の読み込み =====
+@st.cache_data(ttl=60)
+def load_basic_data():
+    try:
+        sh = get_spreadsheet()
+        ws = sh.worksheet("基本情報")
+        return ws.get_all_records()
+    except Exception as e:
+        st.error(f"基本情報の取得に失敗しました: {e}")
+        return []
+
+@st.cache_data(ttl=60)
+def load_drug_data():
+    try:
+        sh = get_spreadsheet()
+        ws = sh.worksheet("薬剤情報")
+        return ws.get_all_records()
+    except Exception as e:
+        st.error(f"薬剤情報の取得に失敗しました: {e}")
+        return []
+
+@st.cache_data(ttl=60)
+def load_master_data():
+    try:
+        sh = get_spreadsheet()
+        ws = sh.worksheet("薬品マスタ")
+        return ws.get_all_records()
+    except Exception as e:
+        st.error(f"薬品マスタの取得に失敗しました: {e}")
+        return []
+
+basic_data  = load_basic_data()
+drug_data   = load_drug_data()
+master_data = load_master_data()
+
+if not basic_data:
+    st.warning("基本情報が取得できませんでした。")
+else:
+    # レジメン選択
+    regimen_list = [
+        f"{b['プロトコールNo']}　{b['レジメン名']}"
+        for b in basic_data
+        if b.get('プロトコールNo', '').strip()
+    ]
+    selected_regimen = st.selectbox(
+        "レジメンを選択してください",
+        options=regimen_list,
+        key="regimen_select_pd"
+    )
+    protocol_no = selected_regimen.split('　')[0].strip()
+
+    # 選択中レジメンの薬剤情報を取得
+    regimen_drugs = [
+        d for d in drug_data
+        if str(d.get('プロトコールNo', '')) == protocol_no
+    ]
+
+    # 薬品マスタをdict化
+    master_dict = {
+        str(m['管理コード']): m for m in master_data
+    }
+
+    # ===== トリガー照合でおすすめ判定 =====
+    def is_recommended(pd_item, regimen_drugs, master_dict):
+        trigger_str = str(pd_item.get("トリガーキーワード", ""))
+        if trigger_str in ("", "手動設定", "全レジメン共通"):
+            return trigger_str == "全レジメン共通"
+        triggers = [t.strip() for t in trigger_str.split("|") if t.strip()]
+        for drug in regimen_drugs:
+            code   = str(drug.get('管理コード', ''))
+            master = master_dict.get(code, {})
+            # 照合対象：薬効分類・薬剤区分・支持療法分類・商品名・一般名
+            targets = " ".join([
+                str(master.get('薬効分類', '')),
+                str(master.get('薬剤区分', '')),
+                str(master.get('支持療法分類', '')),
+                str(master.get('採用商品名（全角）', '')),
+                str(master.get('一般名（全角）', '')),
+                str(drug.get('商品名', '')),
+            ])
+            for trigger in triggers:
+                if trigger in targets:
+                    return True
+        return False
+
+    # ===== 既存の紐付けを取得 =====
+    selected_basic = next(
+        (b for b in basic_data
+         if b['プロトコールNo'] == protocol_no), {}
+    )
+    existing_cats_str = str(selected_basic.get('Pdカテゴリ', ''))
+    existing_cats = [
+        c.strip() for c in existing_cats_str.split('|')
+        if c.strip()
+    ]
+
+    st.markdown(f"**選択中：{protocol_no}　{selected_basic.get('レジメン名','')}**")
+
+    if existing_cats:
+        st.info(f"現在の設定：{' | '.join(existing_cats)}")
+    else:
+        st.info("現在、Pdカテゴリは未設定です。")
+
+    # ===== カテゴリ選択UI =====
+    st.markdown("#### カテゴリを選択してください")
+    selected_cats = []
+
+    for kind, kind_label in [
+        ("A", "🟢 A：標準説明文"),
+        ("B", "🟡 B：副作用発現時"),
+        ("C", "🔵 C：薬剤固有注意"),
+    ]:
+        kind_items = [d for d in pd_data if get_kind(d) == kind]
+        if not kind_items:
+            continue
+
+        st.markdown(f"**{kind_label}**")
+        for item in sort_items(kind_items):
+            cat_id   = str(item.get('カテゴリID', ''))
+            cat_name = str(item.get('カテゴリ名', ''))
+            recommended = is_recommended(item, regimen_drugs, master_dict)
+
+            # デフォルトON判定：おすすめ or 既存設定にある
+            default_val = recommended or (cat_id in existing_cats)
+
+            label = (
+                f"⭐ {cat_id}　{cat_name}  ← おすすめ"
+                if recommended
+                else f"　　{cat_id}　{cat_name}"
+            )
+            checked = st.checkbox(
+                label,
+                value=default_val,
+                key=f"cat_{protocol_no}_{cat_id}"
+            )
+            if checked:
+                selected_cats.append(cat_id)
+
+        st.markdown("---")
+
+    # ===== 保存ボタン =====
+    if st.button("✅ 紐付けを保存する", type="primary"):
+        try:
+            sh = get_spreadsheet()
+            ws_basic   = sh.worksheet("基本情報")
+            all_values = ws_basic.get_all_values()
+            headers    = all_values[0]
+
+            # Pdカテゴリ列のインデックスを取得
+            if 'Pdカテゴリ' not in headers:
+                st.error("❌ 基本情報シートに「Pdカテゴリ」列がありません。")
+            else:
+                pd_col_idx = headers.index('Pdカテゴリ') + 1
+                # プロトコールNo列でrow検索
+                protocol_col = [row[0] for row in all_values]
+                if protocol_no in protocol_col:
+                    row_idx   = protocol_col.index(protocol_no) + 1
+                    new_value = '|'.join(selected_cats)
+                    ws_basic.update_cell(row_idx, pd_col_idx, new_value)
+
+                    # キャッシュクリア
+                    load_basic_data.clear()
+
+                    st.success(
+                        f"✅ {protocol_no} のPdカテゴリを保存しました！\n\n"
+                        f"設定内容：{new_value if new_value else '（なし）'}"
+                    )
+                else:
+                    st.error(f"❌ {protocol_no} が基本情報シートに見つかりません。")
+        except Exception as e:
+            st.error(f"❌ 保存に失敗しました: {e}")
 st.divider()
 st.subheader("📁 ファイル生成")
 
