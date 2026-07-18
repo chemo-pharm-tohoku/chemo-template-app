@@ -51,4 +51,27 @@ Excel・パワポを
     )
 
 st.divider()
+
+st.markdown("### その他")
+
+col4, col5 = st.columns(2)
+
+with col4:
+    st.info("""
+**📝 Pd説明文管理**
+
+化学療法指導記録（Pd欄）に
+使用する説明文テンプレートを
+管理・登録
+""")
+    st.page_link(
+        "pages/4_Pd説明文管理.py",
+        label="📝 Pd説明文管理へ",
+        icon="📝"
+    )
+
+with col5:
+    st.empty()
+
+st.divider()
 st.caption("⚠️ 生成されたファイルは必ず内容を確認してから使用してください")
