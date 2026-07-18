@@ -5,7 +5,7 @@ import json
 from datetime import date, datetime
 
 st.title("💊 レジメン登録")
-st.caption("東北大学病院 薬剤部")
+st.caption("抽出したJSONを スプレッドシートに 登録")
 st.divider()
 
 st.markdown("#### 📋 JSONの取得はこちら　→　[レジメン情報抽出ページへ](./レジメン情報抽出)")
