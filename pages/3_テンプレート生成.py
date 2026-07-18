@@ -260,7 +260,7 @@ def build_pd_sheet(wb, protocol_no, basic_data, pd_data, master_data):
         return  # Pdカテゴリ未設定ならスキップ
 
     # カンマ・読点・スペース区切りに対応
-    pd_ids = [x.strip() for x in re.split(r'[,、\s]+', pd_cat_raw) if x.strip()]
+    pd_ids = [x.strip() for x in re.split(r'[,、|\s]+', pd_cat_raw) if x.strip()]
 
     # ---------- 2. PdシートからID照合 ----------
     pd_dict = {str(p['カテゴリID']).strip(): p for p in pd_data if p.get('カテゴリID')}
