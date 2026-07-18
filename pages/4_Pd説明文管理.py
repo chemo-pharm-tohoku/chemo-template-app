@@ -4,7 +4,8 @@ from google.oauth2.service_account import Credentials
 import pandas as pd
 
 st.title("📝 Pd説明文管理")
-st.caption("東北大学病院 薬剤部")
+st.caption("化学療法指導記録（Pd欄）に使用する説明文テンプレートを管理します。")
+st.caption("種別A（標準）・種別B（副作用発現時）・種別C（薬剤固有注意）の3種類で管理しています。")
 st.divider()
 
 # ===== 認証 =====
@@ -31,6 +32,13 @@ def load_pd_data():
     except Exception as e:
         st.error(f"データの取得に失敗しました: {e}")
         return []
+
+# ===== 種別をIDから取得（ファイル冒頭・グローバルに定義）=====
+def get_kind(item):
+    cat_id = str(item.get("カテゴリID", ""))
+    if len(cat_id) >= 3:
+        return cat_id[2]  # PDA→A / PDB→B / PDC→C
+    return str(item.get("種別", ""))
 
 # ===== 種別カラーの定義 =====
 KIND_COLOR = {
@@ -75,7 +83,7 @@ with col2:
 filtered = pd_data
 if selected_kind != "すべて":
     kind_key = selected_kind[0]  # "A" / "B" / "C"
-    filtered = [d for d in filtered if str(d.get("種別", "")) == kind_key]
+    filtered = [d for d in filtered if get_kind(d) == kind_key]
 if search_word:
     filtered = [
         d for d in filtered
@@ -90,6 +98,39 @@ total = len(pd_data)
 shown = len(filtered)
 st.caption(f"全{total}件中　{shown}件表示")
 
+# ===== Expander表示の共通関数 =====
+def show_item(item):
+    kind = get_kind(item)
+    with st.expander(
+        f"{KIND_COLOR.get(kind,'⚪')} "
+        f"**{item.get('カテゴリID','')}**　"
+        f"{item.get('カテゴリ名','')}"
+    ):
+        col1, col2 = st.columns([1, 3])
+        with col1:
+            st.markdown(f"**種別：** {KIND_LABEL.get(kind,'')}")
+            st.markdown(f"**優先順位：** {item.get('優先順位','')}")
+            st.markdown("**トリガー：**")
+            triggers = str(item.get("トリガーキーワード", "")).split("|")
+            for t in triggers:
+                if t.strip():
+                    st.markdown(f"　・{t.strip()}")
+            if item.get("備考"):
+                st.markdown(f"**備考：** {item.get('備考','')}")
+        with col2:
+            st.markdown("**説明文：**")
+            st.info(item.get("説明文", "（説明文未登録）"))
+            if st.button("📋 コピー用テキスト表示",
+                         key=f"copy_{item.get('カテゴリID','')}"):
+                st.code(item.get("説明文", ""), language=None)
+
+def sort_items(items):
+    return sorted(
+        items,
+        key=lambda x: int(x.get("優先順位", 99))
+        if str(x.get("優先順位", "")).isdigit() else 99
+    )
+
 # ===== 種別ごとにタブ表示 =====
 if selected_kind == "すべて" and not search_word:
     tab_a, tab_b, tab_c = st.tabs([
@@ -99,67 +140,20 @@ if selected_kind == "すべて" and not search_word:
     ])
     tabs = {"A": tab_a, "B": tab_b, "C": tab_c}
     for kind, tab in tabs.items():
-        kind_data = [d for d in pd_data if str(d.get("種別", "")) == kind]
+        kind_data = [d for d in pd_data if get_kind(d) == kind]
         with tab:
             if not kind_data:
                 st.info("登録データがありません")
                 continue
-            for item in sorted(kind_data,
-                               key=lambda x: int(x.get("優先順位", 99))
-                               if str(x.get("優先順位", "")).isdigit() else 99):
-                with st.expander(
-                    f"{KIND_COLOR.get(kind,'⚪')} "
-                    f"**{item.get('カテゴリID','')}**　"
-                    f"{item.get('カテゴリ名','')}"
-                ):
-                    col1, col2 = st.columns([1, 3])
-                    with col1:
-                        st.markdown(f"**種別：** {KIND_LABEL.get(kind,'')}")
-                        st.markdown(f"**優先順位：** {item.get('優先順位','')}")
-                        st.markdown(f"**トリガー：**")
-                        triggers = str(item.get("トリガーキーワード","")).split("|")
-                        for t in triggers:
-                            if t.strip():
-                                st.markdown(f"　・{t.strip()}")
-                        if item.get("備考"):
-                            st.markdown(f"**備考：** {item.get('備考','')}")
-                    with col2:
-                        st.markdown("**説明文：**")
-                        st.info(item.get("説明文", "（説明文未登録）"))
-                        if st.button("📋 コピー用テキスト表示",
-                                     key=f"copy_{item.get('カテゴリID','')}"):
-                            st.code(item.get("説明文", ""), language=None)
+            for item in sort_items(kind_data):
+                show_item(item)
 else:
-    # 絞り込み結果表示
+    # ===== 絞り込み結果表示 =====
     if not filtered:
         st.warning("該当するデータがありません")
     else:
-        for item in sorted(filtered,
-                           key=lambda x: int(x.get("優先順位", 99))
-                           if str(x.get("優先順位", "")).isdigit() else 99):
-            kind = str(item.get("種別", ""))
-            with st.expander(
-                f"{KIND_COLOR.get(kind,'⚪')} "
-                f"**{item.get('カテゴリID','')}**　"
-                f"{item.get('カテゴリ名','')}"
-            ):
-                col1, col2 = st.columns([1, 3])
-                with col1:
-                    st.markdown(f"**種別：** {KIND_LABEL.get(kind,'')}")
-                    st.markdown(f"**優先順位：** {item.get('優先順位','')}")
-                    st.markdown(f"**トリガー：**")
-                    triggers = str(item.get("トリガーキーワード","")).split("|")
-                    for t in triggers:
-                        if t.strip():
-                            st.markdown(f"　・{t.strip()}")
-                    if item.get("備考"):
-                        st.markdown(f"**備考：** {item.get('備考','')}")
-                with col2:
-                    st.markdown("**説明文：**")
-                    st.info(item.get("説明文", "（説明文未登録）"))
-                    if st.button("📋 コピー用テキスト表示",
-                                 key=f"copy_{item.get('カテゴリID','')}"):
-                        st.code(item.get("説明文", ""), language=None)
+        for item in sort_items(filtered):
+            show_item(item)
 
 st.divider()
 
