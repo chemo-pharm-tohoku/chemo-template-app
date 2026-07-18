@@ -33,12 +33,28 @@ def load_pd_data():
         st.error(f"データの取得に失敗しました: {e}")
         return []
 
-# ===== 種別をIDから取得（ファイル冒頭・グローバルに定義）=====
+# ===== 種別をIDから取得 =====
 def get_kind(item):
     cat_id = str(item.get("カテゴリID", ""))
     if len(cat_id) >= 3:
         return cat_id[2]  # PDA→A / PDB→B / PDC→C
     return str(item.get("種別", ""))
+
+# ===== 次のIDを自動採番 =====
+def get_next_id(pd_data, kind):
+    prefix = f"PD{kind}"
+    existing = [
+        str(d.get("カテゴリID", ""))
+        for d in pd_data
+        if str(d.get("カテゴリID", "")).startswith(prefix)
+    ]
+    nums = []
+    for id_str in existing:
+        num_part = id_str[len(prefix):]
+        if num_part.isdigit():
+            nums.append(int(num_part))
+    next_num = max(nums) + 1 if nums else 1
+    return f"{prefix}{next_num:03d}"
 
 # ===== 種別カラーの定義 =====
 KIND_COLOR = {
@@ -50,6 +66,11 @@ KIND_LABEL = {
     "A": "A：標準説明文",
     "B": "B：副作用発現時",
     "C": "C：薬剤固有注意",
+}
+KIND_OPTIONS = {
+    "A：標準説明文":   "A",
+    "B：副作用発現時": "B",
+    "C：薬剤固有注意": "C",
 }
 
 # ===== メイン =====
@@ -70,6 +91,125 @@ if not pd_data:
     st.warning("Pdシートにデータがありません。")
     st.stop()
 
+# ===== 新規追加ボタン =====
+if st.button("➕ 新規説明文を追加する", type="primary"):
+    st.session_state["show_add_form"] = True
+
+# ===== 新規追加フォーム =====
+if st.session_state.get("show_add_form", False):
+    st.divider()
+    st.subheader("➕ 新規説明文の追加")
+
+    with st.form("add_pd_form"):
+
+        # 種別選択（先に選ぶとIDが自動で決まる）
+        kind_label = st.selectbox(
+            "種別 *",
+            options=list(KIND_OPTIONS.keys()),
+        )
+        kind_key = KIND_OPTIONS[kind_label]
+
+        # 自動採番したIDを初期値として表示
+        auto_id = get_next_id(pd_data, kind_key)
+        cat_id = st.text_input(
+            "カテゴリID *",
+            value=auto_id,
+            help="自動採番されます。変更も可能です。"
+        )
+
+        cat_name = st.text_input(
+            "カテゴリ名 *",
+            placeholder="例：irAE全般、下痢発現時"
+        )
+
+        trigger = st.text_input(
+            "トリガーキーワード",
+            placeholder="例：抗PD-1|抗PD-L1　（複数はパイプ区切り）",
+            help="自動判定に使用するキーワード。手動設定の場合は空欄でも可。"
+        )
+
+        description = st.text_area(
+            "説明文 *",
+            height=150,
+            placeholder="例：irAEは発現時期や重症度、発現部位などに個人差があります…"
+        )
+
+        priority = st.number_input(
+            "優先順位",
+            min_value=1,
+            max_value=999,
+            value=99,
+            help="数値が小さいほど上に表示されます"
+        )
+
+        note = st.text_input(
+            "備考",
+            placeholder="任意"
+        )
+
+        col1, col2 = st.columns(2)
+        with col1:
+            submitted = st.form_submit_button(
+                "✅ 登録する",
+                type="primary",
+                use_container_width=True
+            )
+        with col2:
+            cancelled = st.form_submit_button(
+                "❌ キャンセル",
+                use_container_width=True
+            )
+
+    # ===== キャンセル =====
+    if cancelled:
+        st.session_state["show_add_form"] = False
+        st.rerun()
+
+    # ===== 登録処理 =====
+    if submitted:
+        # バリデーション
+        errors = []
+        if not cat_id.strip():
+            errors.append("カテゴリIDを入力してください")
+        if not cat_name.strip():
+            errors.append("カテゴリ名を入力してください")
+        if not description.strip():
+            errors.append("説明文を入力してください")
+
+        # ID重複チェック
+        existing_ids = [str(d.get("カテゴリID", "")) for d in pd_data]
+        if cat_id.strip() in existing_ids:
+            errors.append(f"カテゴリID「{cat_id}」はすでに存在します")
+
+        if errors:
+            for e in errors:
+                st.error(f"❌ {e}")
+        else:
+            try:
+                sh = get_spreadsheet()
+                ws = sh.worksheet("Pd")
+                new_row = [
+                    cat_id.strip(),
+                    cat_name.strip(),
+                    kind_key,
+                    trigger.strip(),
+                    description.strip(),
+                    priority,
+                    note.strip(),
+                ]
+                ws.append_row(new_row, value_input_option="USER_ENTERED")
+
+                st.success(f"✅ 「{cat_name}」を登録しました！")
+                st.session_state["show_add_form"] = False
+                # キャッシュクリアして再読み込み
+                load_pd_data.clear()
+                st.rerun()
+
+            except Exception as e:
+                st.error(f"❌ 登録に失敗しました: {e}")
+
+    st.divider()
+
 # ===== 絞り込みフィルター =====
 st.subheader("🔍 絞り込み")
 col1, col2 = st.columns(2)
@@ -77,12 +217,15 @@ with col1:
     kind_options = ["すべて", "A：標準説明文", "B：副作用発現時", "C：薬剤固有注意"]
     selected_kind = st.selectbox("種別で絞り込み", kind_options)
 with col2:
-    search_word = st.text_input("キーワード検索", placeholder="カテゴリ名・説明文で検索")
+    search_word = st.text_input(
+        "キーワード検索",
+        placeholder="カテゴリ名・説明文で検索"
+    )
 
 # ===== フィルタリング =====
 filtered = pd_data
 if selected_kind != "すべて":
-    kind_key = selected_kind[0]  # "A" / "B" / "C"
+    kind_key = selected_kind[0]
     filtered = [d for d in filtered if get_kind(d) == kind_key]
 if search_word:
     filtered = [
@@ -120,8 +263,10 @@ def show_item(item):
         with col2:
             st.markdown("**説明文：**")
             st.info(item.get("説明文", "（説明文未登録）"))
-            if st.button("📋 コピー用テキスト表示",
-                         key=f"copy_{item.get('カテゴリID','')}"):
+            if st.button(
+                "📋 コピー用テキスト表示",
+                key=f"copy_{item.get('カテゴリID','')}"
+            ):
                 st.code(item.get("説明文", ""), language=None)
 
 def sort_items(items):
@@ -148,7 +293,6 @@ if selected_kind == "すべて" and not search_word:
             for item in sort_items(kind_data):
                 show_item(item)
 else:
-    # ===== 絞り込み結果表示 =====
     if not filtered:
         st.warning("該当するデータがありません")
     else:
@@ -156,9 +300,5 @@ else:
             show_item(item)
 
 st.divider()
-
-# ===== 新規追加への導線 =====
-st.subheader("➕ 新規追加")
-st.info("新しい説明文を追加したい場合は、スプレッドシートの「Pd」タブに直接入力してください。")
-st.markdown(f"[📊 スプレッドシートを開く]({st.secrets['spreadsheet']['url']})")
+st.markdown(f"[📊 スプレッドシートを直接編集する]({st.secrets['spreadsheet']['url']})")
 st.caption("※ 追加後はページを再読み込みすると反映されます")
