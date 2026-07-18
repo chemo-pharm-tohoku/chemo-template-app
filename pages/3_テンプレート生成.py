@@ -17,6 +17,12 @@ from lxml import etree
 import urllib.request
 import csv
 
+# ===== 既存のimportの下に追加 =====
+from datetime import date
+
+# ページ内のどこか（load_all_dataの前あたり）に追加
+today_str = date.today().strftime("%Y%m%d")
+
 st.set_page_config(
     page_title="ケモテンプレート生成システム",
     page_icon="💊",
@@ -1197,7 +1203,7 @@ with col_excel:
             st.download_button(
                 label="⬇️ Excelをダウンロード",
                 data=excel_data,
-                file_name=f"{protocol_no}_AI作成要チェック.xlsx",
+                file_name=f"{protocol_no}_AI作成要チェック_{today_str}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True
             )
@@ -1216,7 +1222,7 @@ with col_pptx:
             st.download_button(
                 label="⬇️ パワポをダウンロード",
                 data=pptx_data,
-                file_name=f"{protocol_no}_スケジュールシール_AI作成要チェック.pptx",
+                file_name=f"{protocol_no}_スケジュールシール_AI作成要チェック_{today_str}.pptx",
                 mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
                 use_container_width=True
             )
