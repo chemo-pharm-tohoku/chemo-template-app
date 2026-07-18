@@ -434,7 +434,8 @@ if st.session_state.get("show_add_form", False):
                 st.error(f"❌ 登録に失敗しました: {e}")
 
 st.divider()
-PD_SHEET_URL = f"https://docs.google.com/spreadsheets/d/1dLEUYSZlrIK1uHqEtEAfS1jSAPpXCIiAiAk_iaRuY-8/edit#gid=224247887"
-st.markdown(f"[📊 スプレッドシートを直接編集する（Pdシート）]({PD_SHEET_URL})")
+st.markdown(
+    "[📊 スプレッドシートを直接編集する（Pdシート）]"
+    "(https://docs.google.com/spreadsheets/d/1dLEUYSZlrIK1uHqEtEAfS1jSAPpXCIiAiAk_iaRuY-8/edit#gid=224247887)"
 )
 st.caption("※ 追加後はページを再読み込みすると反映されます")
