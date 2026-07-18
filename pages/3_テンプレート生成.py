@@ -361,7 +361,7 @@ def build_pd_sheet(wb, protocol_no, basic_data, pd_data, master_data):
     ws_pd.merge_cells('A1:B1')
     ws_pd['A1'] = f'【{protocol_no}】Pd説明文　コピペ用シート'
     ws_pd['A1'].fill      = FILL_TITLE
-    ws_pd['A1'].font      = Font(name="BIZ UDゴシック", color='FFFFFF', bold=True, size=13)
+    ws_pd['A1'].font      = Font(color='FFFFFF', bold=True, size=13)
     ws_pd['A1'].alignment = Alignment(horizontal='left', vertical='center')
     ws_pd.row_dimensions[1].height = 28
 
@@ -397,7 +397,7 @@ def build_pd_sheet(wb, protocol_no, basic_data, pd_data, master_data):
             # 該当なし行
             ws_pd.merge_cells(f'A{current_row}:B{current_row}')
             ws_pd[f'A{current_row}']           = '（このレジメンには該当する説明文がありません）'
-            ws_pd[f'A{current_row}'].font      = Font(name="BIZ UDゴシック", color='999999', italic=True, size=9)
+            ws_pd[f'A{current_row}'].font      = Font(color='999999', italic=True, size=9)
             ws_pd[f'A{current_row}'].alignment = Alignment(horizontal='left', vertical='center')
             ws_pd[f'A{current_row}'].border    = BORDER
             ws_pd.row_dimensions[current_row].height = 16
@@ -409,7 +409,7 @@ def build_pd_sheet(wb, protocol_no, basic_data, pd_data, master_data):
             c = ws_pd.cell(row=current_row, column=col)
             c.value     = label
             c.fill      = PatternFill('solid', fgColor='546E7A')
-            c.font      = Font(name="BIZ UDゴシック", color='FFFFFF', bold=True, size=10)
+            c.font      = Font(color='FFFFFF', bold=True, size=10)
             c.alignment = Alignment(horizontal='center', vertical='center')
             c.border    = BORDER
         ws_pd.row_dimensions[current_row].height = 16
@@ -536,7 +536,7 @@ def create_excel(protocol_no, basic_data, drug_data,
     ws1.merge_cells('A1:D1')
     ws1['A1'] = f"【{protocol_no}】{basic['レジメン名']}"
     ws1['A1'].fill      = FILL_HEADER
-    ws1['A1'].font      = Font(name="BIZ UDゴシック", color='FFFFFF', bold=True, size=12)
+    ws1['A1'].font      = Font(color='FFFFFF', bold=True, size=12)
     ws1['A1'].alignment = Alignment(horizontal='left', vertical='center')
     ws1.row_dimensions[1].height = 25
     ws1.merge_cells('A2:D2')
@@ -719,7 +719,7 @@ def create_excel(protocol_no, basic_data, drug_data,
     ws2.column_dimensions['A'].width = 70
     ws2['A1'] = '▼コピーしてカルテに貼り付けてください'
     ws2['A1'].fill = PatternFill('solid', fgColor='ADD8E6')
-    ws2['A1'].font = Font(name="BIZ UDゴシック", bold=True)
+    ws2['A1'].font = Font(bold=True)
 
     bsa_ref = f'入力!B{BSA_ROW}' if need_bsa else None
     bw_ref  = f'入力!B{BW_ROW}'  if need_bw  else None
@@ -784,7 +784,7 @@ def create_excel(protocol_no, basic_data, drug_data,
     srow = 1
     ws3.merge_cells(f'A{srow}:B{srow}')
     ws3[f'A{srow}'] = '●化学療法：'
-    ws3[f'A{srow}'].font = Font(name="BIZ UDゴシック", bold=True, size=11)
+    ws3[f'A{srow}'].font = Font(bold=True, size=11)
     srow += 1
     course_f = (
         f'=IFERROR("【{protocol_no}】{short_name}（1コース{basic["1コース日数"]}日）　"'
@@ -793,13 +793,13 @@ def create_excel(protocol_no, basic_data, drug_data,
     )
     ws3.merge_cells(f'A{srow}:B{srow}')
     ws3[f'A{srow}'] = course_f
-    ws3[f'A{srow}'].font = Font(name="BIZ UDゴシック", bold=True)
+    ws3[f'A{srow}'].font = Font(bold=True)
     ws3[f'A{srow}'].alignment = Alignment(wrap_text=True)
     ws3.row_dimensions[srow].height = 45
     srow += 2
     ws3.merge_cells(f'A{srow}:B{srow}')
     ws3[f'A{srow}'] = '＜抗がん薬＞'
-    ws3[f'A{srow}'].font = Font(name="BIZ UDゴシック", bold=True)
+    ws3[f'A{srow}'].font = Font(bold=True)
     srow += 1
 
     cancer_day_nums = sorted(set(
@@ -827,7 +827,7 @@ def create_excel(protocol_no, basic_data, drug_data,
 
     ws3.merge_cells(f'A{srow}:B{srow}')
     ws3[f'A{srow}'] = make_date_formula(cancer_day_nums, START_DATE_ROW)
-    ws3[f'A{srow}'].font = Font(name="BIZ UDゴシック", bold=True)
+    ws3[f'A{srow}'].font = Font(bold=True)
     srow += 1
 
     for drug in cancer_drugs:
@@ -849,7 +849,7 @@ def create_excel(protocol_no, basic_data, drug_data,
     srow += 1
     ws3.merge_cells(f'A{srow}:B{srow}')
     ws3[f'A{srow}'] = '＜支持療法＞'
-    ws3[f'A{srow}'].font = Font(name="BIZ UDゴシック", bold=True)
+    ws3[f'A{srow}'].font = Font(bold=True)
     srow += 1
     if support_inj_all:
         ws3.merge_cells(f'A{srow}:B{srow}')
@@ -948,7 +948,7 @@ def create_excel(protocol_no, basic_data, drug_data,
     ws4.merge_cells(f'A{erow}:{get_column_letter(n_cols_4)}{erow}')
     ws4[f'A{erow}'] = f"【{protocol_no}】{regimen_short}"
     ws4[f'A{erow}'].fill = FILL_HEADER
-    ws4[f'A{erow}'].font = Font(name="BIZ UDゴシック", color='FFFFFF', bold=True, size=13)
+    ws4[f'A{erow}'].font = Font(color='FFFFFF', bold=True, size=13)
     ws4[f'A{erow}'].alignment = Alignment(horizontal='left', vertical='center')
     ws4.row_dimensions[erow].height = 25; erow += 1
 
@@ -960,7 +960,7 @@ def create_excel(protocol_no, basic_data, drug_data,
     for title, height in [('◎治療スケジュール',18),('＜注射＞',16)]:
         ws4.merge_cells(f'A{erow}:{get_column_letter(n_cols_4)}{erow}')
         ws4[f'A{erow}'] = title
-        ws4[f'A{erow}'].font = Font(name="BIZ UDゴシック", bold=True, size=11 if title=='◎治療スケジュール' else 10)
+        ws4[f'A{erow}'].font = Font(bold=True, size=11 if title=='◎治療スケジュール' else 10)
         ws4[f'A{erow}'].alignment = Alignment(horizontal='left')
         ws4.row_dimensions[erow].height = height; erow += 1
 
@@ -1005,7 +1005,7 @@ def create_excel(protocol_no, basic_data, drug_data,
                     c.value='●'; c.fill=row_fill
                 else:
                     c.value='－'; c.fill=PatternFill('solid',fgColor='FAFAFA')
-                    c.font=Font(name="BIZ UDゴシック", color='AAAAAA')
+                    c.font=Font(color='AAAAAA')
             c.alignment=Alignment(horizontal='center',vertical='center'); c.border=BORDER
         erow += 1
 
@@ -1020,7 +1020,7 @@ def create_excel(protocol_no, basic_data, drug_data,
             c = ws4.cell(row=start_r, column=col_num)
             c.value = 'お休み' if col['type']=='休薬' else '－'
             c.fill  = FILL_REST if col['type']=='休薬' else FILL_RESTM
-            c.font  = Font(name="BIZ UDゴシック", bold=True, color='555555')
+            c.font  = Font(bold=True, color='555555')
             c.alignment = Alignment(horizontal='center',vertical='center')
             c.border = BORDER
     erow += 1
@@ -1028,7 +1028,7 @@ def create_excel(protocol_no, basic_data, drug_data,
     if oral_schedule:
         ws4.merge_cells(f'A{erow}:{get_column_letter(n_cols_4)}{erow}')
         ws4[f'A{erow}'] = '＜内服＞'
-        ws4[f'A{erow}'].font = Font(name="BIZ UDゴシック", bold=True)
+        ws4[f'A{erow}'].font = Font(bold=True)
         ws4[f'A{erow}'].alignment = Alignment(horizontal='left')
         ws4.row_dimensions[erow].height = 16; erow += 1
         for drug in oral_schedule:
@@ -1053,7 +1053,7 @@ def create_excel(protocol_no, basic_data, drug_data,
     erow += 1
     ws4.merge_cells(f'A{erow}:{get_column_letter(n_cols_4)}{erow}')
     ws4[f'A{erow}'] = '◎注意事項'
-    ws4[f'A{erow}'].font = Font(name="BIZ UDゴシック", bold=True, size=11)
+    ws4[f'A{erow}'].font = Font(bold=True, size=11)
     ws4[f'A{erow}'].alignment = Alignment(horizontal='left')
     ws4.row_dimensions[erow].height = 18; erow += 1
 
@@ -1126,6 +1126,7 @@ def create_pptx(protocol_no, basic_data, drug_data,
             p.alignment = align
             run = p.add_run()
             run.text = str(line); run.font.size = font_size
+            run.font.name = "BIZ UDゴシック"
             run.font.bold = bold; run.font.color.rgb = color
 
     def set_cell_margin(cell, top=Cm(0.05), bottom=Cm(0.05),
@@ -1149,6 +1150,7 @@ def create_pptx(protocol_no, basic_data, drug_data,
         p = tf.paragraphs[0]; p.alignment = align
         run = p.add_run()
         run.text=str(text); run.font.size=font_size
+        run.font.name = "BIZ UDゴシック"
         run.font.bold=bold; run.font.color.rgb=color
         return txBox
 
@@ -1162,6 +1164,7 @@ def create_pptx(protocol_no, basic_data, drug_data,
             p.alignment = align
             run = p.add_run()
             run.text=str(line); run.font.size=font_size
+            run.font.name = "BIZ UDゴシック"
             run.font.bold=bold; run.font.color.rgb=color
         return txBox
 
