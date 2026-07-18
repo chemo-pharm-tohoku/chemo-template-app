@@ -9,7 +9,6 @@ st.caption("東北大学病院 薬剤部")
 st.divider()
 
 st.markdown("#### 📋 JSONの取得はこちら　→　[レジメン情報抽出ページへ](./レジメン情報抽出)")
-
 st.divider()
 
 # ===== 認証 =====
@@ -27,11 +26,27 @@ def get_spreadsheet():
     sh = gc.open_by_url(st.secrets["spreadsheet"]["url"])
     return sh
 
+# ===== キー名ぶれを吸収するヘルパー関数 =====
+def get_val(d, *keys, default=""):
+    """複数のキー名候補から値を取得する"""
+    for key in keys:
+        if key in d and d[key] is not None:
+            return d[key]
+    return default
+
+def get_drugs(data):
+    """drug_info / drugs どちらでも取得できる"""
+    return data.get("drug_info") or data.get("drugs") or []
+
+def get_basic(data):
+    """basic_info を取得"""
+    return data.get("basic_info") or {}
+
 # ===== JSON貼り付けエリア =====
 json_text = st.text_area(
     "JSONをここに貼り付けてください",
     height=300,
-    placeholder='{ "basic_info": { ... }, "drugs": [ ... ] }'
+    placeholder='{ "basic_info": { ... }, "drug_info": [ ... ] }'
 )
 
 if st.button("👁 内容を確認", type="primary"):
@@ -40,34 +55,62 @@ if st.button("👁 内容を確認", type="primary"):
     else:
         try:
             data = json.loads(json_text)
-            info = data["basic_info"]
+            info = get_basic(data)
+            drugs = get_drugs(data)
 
-            # セッションに保存
+            # 必須チェック
+            protocol_no = get_val(info, "protocol_no")
+            regimen_name = get_val(info, "regimen_name")
+            disease = get_val(
+                info,
+                "disease",          # アプリのキー名
+                "target_disease",   # LMがぶれたとき
+                "対象疾患",
+                default=""
+            )
+            course_days = get_val(info, "course_days", default="要確認")
+
+            if not protocol_no:
+                st.error("❌ basic_info に 'protocol_no' がありません。JSONを確認してください。")
+                st.stop()
+            if not regimen_name:
+                st.error("❌ basic_info に 'regimen_name' がありません。JSONを確認してください。")
+                st.stop()
+            if not drugs:
+                st.error("❌ 薬剤情報（drug_info）が見つかりません。JSONを確認してください。")
+                st.stop()
+
+            # セッションに保存（正規化済みデータ）
             st.session_state["parsed_data"] = data
             st.session_state["json_text"] = json_text
+            st.session_state["protocol_no"] = protocol_no
+            st.session_state["regimen_name"] = regimen_name
+            st.session_state["disease"] = disease
+            st.session_state["course_days"] = course_days
 
             # 基本情報表示
             st.subheader("📋 基本情報")
             col1, col2 = st.columns(2)
             with col1:
-                st.write(f"**プロトコールNo：** {info['protocol_no']}")
-                st.write(f"**レジメン名：** {info['regimen_name']}")
+                st.write(f"**プロトコールNo：** {protocol_no}")
+                st.write(f"**レジメン名：** {regimen_name}")
             with col2:
-                st.write(f"**対象疾患：** {info['disease']}")
-                st.write(f"**1コース日数：** {info['course_days'] or '要確認'}")
+                st.write(f"**対象疾患：** {disease or '（未取得）'}")
+                st.write(f"**1コース日数：** {course_days}")
 
             # 薬剤情報表示
             st.subheader("💊 薬剤情報")
             import pandas as pd
             drug_list = []
-            for drug in data["drugs"]:
+            for drug in drugs:
                 drug_list.append({
-                    "順序": drug.get("order", ""),
-                    "商品名": drug.get("brand_name", ""),
-                    "投与量": f"{drug.get('dose_value', '')}{drug.get('dose_unit', '')}",
-                    "用量根拠": drug.get("dose_basis", ""),
-                    "Day": drug.get("day_text", ""),
-                    "管理コード": drug.get("management_code", ""),
+                    "順序": get_val(drug, "order"),
+                    "商品名": get_val(drug, "product_name", "brand_name"),
+                    "投与量": f"{get_val(drug, 'dosage_value', 'dose_value')}"
+                              f"{get_val(drug, 'dosage_unit', 'dose_unit')}",
+                    "用量根拠": get_val(drug, "dosage_basis", "dose_basis"),
+                    "Day": get_val(drug, "admin_day_text", "day_text"),
+                    "管理コード": get_val(drug, "management_code"),
                 })
             st.dataframe(pd.DataFrame(drug_list), use_container_width=True)
 
@@ -75,7 +118,6 @@ if st.button("👁 内容を確認", type="primary"):
             sh = get_spreadsheet()
             ws_basic = sh.worksheet("基本情報")
             existing = ws_basic.col_values(1)
-            protocol_no = info["protocol_no"]
 
             if protocol_no in existing:
                 st.warning(f"⚠️ {protocol_no} はすでに登録されています。上書きしますか？")
@@ -86,8 +128,8 @@ if st.button("👁 内容を確認", type="primary"):
 
         except json.JSONDecodeError as e:
             st.error(f"❌ JSONの形式が正しくありません: {e}")
-        except KeyError as e:
-            st.error(f"❌ 必要な項目が見つかりません: {e}")
+        except Exception as e:
+            st.error(f"❌ エラーが発生しました: {e}")
 
 # ===== 登録ボタン =====
 if "parsed_data" in st.session_state:
@@ -116,13 +158,20 @@ if "parsed_data" in st.session_state:
     if do_register:
         try:
             data = st.session_state["parsed_data"]
+            info = get_basic(data)
+            drugs = get_drugs(data)
             sh = get_spreadsheet()
             today = date.today().strftime("%Y/%-m/%-d")
             now = datetime.now().strftime("%Y/%-m/%-d %H:%M")
-            protocol_no = data["basic_info"]["protocol_no"]
+
+            protocol_no   = st.session_state["protocol_no"]
+            regimen_name  = st.session_state["regimen_name"]
+            disease       = st.session_state["disease"]
+            course_days   = st.session_state["course_days"]
+
             ws_basic = sh.worksheet("基本情報")
-            ws_drug = sh.worksheet("薬剤情報")
-            ws_log = sh.worksheet("抽出ログ")
+            ws_drug  = sh.worksheet("薬剤情報")
+            ws_log   = sh.worksheet("抽出ログ")
 
             with st.spinner("登録中..."):
                 if overwrite:
@@ -143,38 +192,38 @@ if "parsed_data" in st.session_state:
                 # 基本情報書き込み
                 basic_row = [
                     protocol_no,
-                    data["basic_info"]["regimen_name"],
-                    data["basic_info"]["disease"],
+                    regimen_name,
+                    disease,
                     "",
-                    data["basic_info"]["course_days"] or "要確認",
+                    course_days if course_days else "要確認",
                     "", "", "", "",
                     today,
                     "",
                 ]
                 ws_basic.append_row(basic_row, value_input_option="USER_ENTERED")
 
-                # 薬剤情報書き込み
-                for drug in data["drugs"]:
+                # 薬剤情報書き込み（LMキー名・旧キー名どちらも対応）
+                for drug in drugs:
                     drug_row = [
                         protocol_no,
-                        drug.get("order", ""),
-                        drug.get("management_code", ""),
-                        drug.get("brand_name", ""),
-                        drug.get("dose_value", ""),
-                        drug.get("dose_unit", ""),
-                        drug.get("dose_basis", ""),
-                        drug.get("day_text", ""),
-                        drug.get("day_numbers", ""),
-                        drug.get("timing", ""),
-                        drug.get("diluent_ml", ""),
-                        drug.get("infusion_time_text", ""),
-                        drug.get("infusion_time_hours", ""),
-                        drug.get("flag_O_chemo", ""),
-                        drug.get("flag_O_support", ""),
-                        drug.get("flag_seal", ""),
-                        drug.get("flag_chart", ""),
-                        drug.get("flag_leaflet", ""),
-                        drug.get("note", ""),
+                        get_val(drug, "order"),
+                        get_val(drug, "management_code"),
+                        get_val(drug, "product_name",        "brand_name"),
+                        get_val(drug, "dosage_value",        "dose_value"),
+                        get_val(drug, "dosage_unit",         "dose_unit"),
+                        get_val(drug, "dosage_basis",        "dose_basis"),
+                        get_val(drug, "admin_day_text",      "day_text"),
+                        get_val(drug, "admin_day_numeric",   "day_numbers"),
+                        get_val(drug, "admin_timing",        "timing"),
+                        get_val(drug, "diluent_volume",      "diluent_ml"),
+                        get_val(drug, "admin_time_text",     "infusion_time_text"),
+                        get_val(drug, "admin_time_numeric",  "infusion_time_hours"),
+                        get_val(drug, "anticancer_flag",     "flag_O_chemo"),
+                        get_val(drug, "support_flag",        "flag_O_support"),
+                        get_val(drug, "seal_flag",           "flag_seal"),
+                        get_val(drug, "figure_flag",         "flag_chart"),
+                        get_val(drug, "manual_flag",         "flag_leaflet"),
+                        get_val(drug, "remarks",             "note"),
                     ]
                     ws_drug.append_row(drug_row, value_input_option="USER_ENTERED")
 
@@ -183,9 +232,9 @@ if "parsed_data" in st.session_state:
                 log_row = [
                     now,
                     protocol_no,
-                    data["basic_info"]["regimen_name"],
+                    regimen_name,
                     operation,
-                    len(data["drugs"]),
+                    len(drugs),
                 ]
                 ws_log.append_row(log_row, value_input_option="USER_ENTERED")
 
