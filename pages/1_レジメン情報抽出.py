@@ -40,7 +40,7 @@ with col3:
         st.download_button(
             label="📥 抽出定義書をダウンロード",
             data=f,
-            file_name="ケモテンプレート抽出定義書.txt",
+            file_name="ケモテンプレート抽出定義書260718.txt",
             mime="text/plain"
         )
         
