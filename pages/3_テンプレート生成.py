@@ -24,7 +24,7 @@ from datetime import date
 today_str = date.today().strftime("%Y%m%d")
 
 st.set_page_config(
-    page_title="ケモテンプレート生成",
+    page_title="テンプレート生成",
     page_icon="💊",
     layout="centered",
     initial_sidebar_state="expanded",
