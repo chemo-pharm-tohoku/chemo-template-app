@@ -218,11 +218,12 @@ def build_pd_sheet(wb, protocol_no, basic_data, pd_data, master_data):
     FILL_TITLE      = PatternFill('solid', fgColor='2E4057')   # ダーク
     FILL_GUIDE      = PatternFill('solid', fgColor='FFF9C4')   # ガイド背景
 
-    FONT_WHITE      = Font(color='FFFFFF', bold=True, size=11)
-    FONT_BOLD       = Font(color='000000', bold=True)
-    FONT_NORMAL     = Font(color='000000', size=10)
-    FONT_GUIDE      = Font(color='795548', size=9)
-    FONT_DRUG       = Font(color='1565C0', bold=True, size=10)  # 薬剤名は青太字
+    FONT_BASE   = "BIZ UDゴシック"
+    FONT_WHITE  = Font(name=FONT_BASE, color='FFFFFF', bold=True, size=11)
+    FONT_BOLD   = Font(name=FONT_BASE, color='000000', bold=True)
+    FONT_NORMAL = Font(name=FONT_BASE, color='000000', size=10)
+    FONT_GUIDE  = Font(name=FONT_BASE, color='795548', size=9)
+    FONT_DRUG   = Font(name=FONT_BASE, color='1565C0', bold=True, size=10)
 
     thin   = Side(style='thin',   color='CCCCCC')
     medium = Side(style='medium', color='888888')
@@ -481,12 +482,25 @@ def create_excel(protocol_no, basic_data, drug_data,
     FILL_RESTM    = PatternFill('solid', fgColor='EBEBEB')
     FILL_ORAL     = PatternFill('solid', fgColor='F0FFF0')
     FILL_WARNING  = PatternFill('solid', fgColor='FFF3CD')
-    FONT_WHITE        = Font(color='FFFFFF', bold=True)
-    FONT_BOLD         = Font(color='000000', bold=True)
-    FONT_NORMAL       = Font(color='000000')
-    FONT_DISABLED     = Font(color='999999')
-    FONT_WARNING      = Font(color='856404', bold=True)
-    FONT_WARNING_BODY = Font(color='856404')
+    FONT_WHITE        = Font(name="BIZ UDゴシック", color='FFFFFF', bold=True, size=12)
+    FONT_BOLD        = Font(name="BIZ UDゴシック", bold=True, size=11)
+    FONT_NORMAL       = Font(name="BIZ UDゴシック", color='000000')
+    FONT_DISABLED     = Font(name="BIZ UDゴシック", color='999999')
+    FONT_WARNING      = Font(name="BIZ UDゴシック", color='856404', bold=True)
+    FONT_WARNING_BODY = Font(name="BIZ UDゴシック", color='856404')
+                     
+    # ===== 追加：BIZ UDゴシック 全体フォント定義 =====
+    FONT_BASE = "BIZ UDゴシック"
+
+    # ===== 既存フォント定義を上書き =====
+    FONT_WHITE        = Font(name=FONT_BASE, color='FFFFFF', bold=True)
+    FONT_BOLD         = Font(name=FONT_BASE, color='000000', bold=True)
+    FONT_NORMAL       = Font(name=FONT_BASE, color='000000')
+    FONT_DISABLED     = Font(name=FONT_BASE, color='999999')
+    FONT_WARNING      = Font(name=FONT_BASE, color='856404', bold=True)
+    FONT_WARNING_BODY = Font(name=FONT_BASE, color='856404')
+
+    thin   = Side(style='thin',   color='CCCCCC')
     thin   = Side(style='thin',   color='CCCCCC')
     medium = Side(style='medium', color='333333')
     BORDER        = Border(left=thin,   right=thin,   top=thin,   bottom=thin)
