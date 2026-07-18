@@ -1422,7 +1422,6 @@ st.caption("登録済みレジメンから Excel・パワポを 生成")
 st.divider()
 
 with st.spinner("スプレッドシートからデータを読み込み中..."):
-    # ===== 変更：pd_dataを追加 =====
     basic_data, drug_data, master_data, notes_data, pd_data = load_all_data()
 
 if not basic_data:
@@ -1479,11 +1478,12 @@ if selected_basic:
             ):
                 st.session_state["pd_skip"] = True
                 st.rerun()
-        else:
+    else:
         st.success(f"✅ Pdカテゴリ設定済み：{pd_cats}")
         if st.button("🔄 データを最新化する", help="Pd設定後はこちらを押してください"):
             st.cache_data.clear()
             st.rerun()
+
 st.divider()
 st.subheader("📁 ファイル生成")
 
@@ -1495,7 +1495,7 @@ with col_excel:
             excel_data = create_excel(
                 protocol_no, basic_data,
                 drug_data, master_data, notes_data,
-                pd_data=pd_data    # ===== 追加 =====
+                pd_data=pd_data
             )
         if excel_data:
             st.download_button(
