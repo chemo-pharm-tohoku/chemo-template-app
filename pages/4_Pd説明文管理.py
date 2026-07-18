@@ -300,5 +300,6 @@ else:
             show_item(item)
 
 st.divider()
-st.markdown(f"[📊 スプレッドシートを直接編集する]({st.secrets['spreadsheet']['url']})")
+PD_SHEET_URL = f"{st.secrets['spreadsheet']['url']}#gid=224247887"
+st.markdown(f"[📊 スプレッドシートを直接編集する（Pdシート）]({PD_SHEET_URL})")
 st.caption("※ 追加後はページを再読み込みすると反映されます")
