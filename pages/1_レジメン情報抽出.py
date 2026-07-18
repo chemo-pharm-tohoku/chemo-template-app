@@ -36,7 +36,7 @@ with col3:
 下のボタンからダウンロード
 して追加
 """)
-    with open("NotebookLM 抽出定義書260712.txt", "rb") as f:
+    with open("NotebookLM 抽出定義書260718.txt", "rb") as f:
         st.download_button(
             label="📥 抽出定義書をダウンロード",
             data=f,
