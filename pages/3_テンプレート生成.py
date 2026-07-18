@@ -43,7 +43,7 @@ def get_gspread_client():
     )
     return gspread.authorize(creds)
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=60)
 def fetch_sheet(sheet_name):
     try:
         gc = get_gspread_client()
