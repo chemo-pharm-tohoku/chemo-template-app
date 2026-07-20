@@ -285,8 +285,8 @@ def show_pd_confirm_ui(protocol_no, drug_data, ae_data, pd_data, master_data, ba
                 })
 
     if not pd_evidence:
-        st.warning("副作用マスタから算出できるPdカテゴリがありません。")
-        st.info("副作用マスタへの登録が完了していない薬剤がある可能性があります。")
+        st.info("副作用マスタへの登録が完了すると、ここにPdカテゴリが表示されます。")
+        st.caption("上の副作用登録を完了するか、手動でPdカテゴリを設定してください。")
         return
 
     # ---------- 優先順位でソート ----------
@@ -2001,14 +2001,7 @@ if selected_basic:
     ]))
 
     if cancer_drug_codes:
-        # 副作用マスタをリアルタイムで取得（キャッシュなし）
-        try:
-            gc_rt  = get_gspread_client()
-            ss_rt  = gc_rt.open_by_url(SPREADSHEET_URL)
-            ws_rt  = ss_rt.worksheet("抗がん剤副作用マスタ")
-            ae_data = ws_rt.get_all_records()
-        except Exception:
-            ae_data = ae_data  # 失敗時はキャッシュを使用
+        # 副作用マスタはキャッシュを使用（429対策）
         ae_dict = {
             str(r.get('管理コード', '')).strip(): r
             for r in ae_data
@@ -2073,14 +2066,12 @@ if selected_basic:
                 drug_data, basic_data, pd_data
             )
 
-    # Pdカテゴリ確認UI
-    # 副作用登録中でなく、かつPdカテゴリが設定済みの場合に表示
-    if (not st.session_state.get("ae_reg_start", False)
-            and str(selected_basic.get("Pdカテゴリ", "")).strip()):
-        show_pd_confirm_ui(
-            protocol_no, drug_data, ae_data,
-            pd_data, master_data, basic_data
-        )
+    # Pdカテゴリ確認UI（常時表示）
+    # 未登録薬剤があっても登録しなくても確認・確定できる
+    show_pd_confirm_ui(
+        protocol_no, drug_data, ae_data,
+        pd_data, master_data, basic_data
+    )
 
     # 確定完了メッセージ
     if st.session_state.get("pd_confirmed", False):
