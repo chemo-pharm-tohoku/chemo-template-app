@@ -386,6 +386,8 @@ def show_pd_confirm_ui(protocol_no, drug_data, ae_data, pd_data, master_data, ba
                     if _k.startswith(f"pd_confirm_{protocol_no}"):
                         del st.session_state[_k]
                 st.session_state["pd_confirmed"] = True
+                # 基本情報キャッシュをクリアして最新のPdカテゴリを反映
+                fetch_sheet_realtime.clear()
                 st.rerun()
         except Exception as e:
             st.error(f"更新エラー: {e}")
@@ -687,6 +689,8 @@ def show_ae_register_ui(unregistered, ae_data, master_data, drug_data, basic_dat
                     st.session_state["ae_reg_done"].append(code)
                     st.session_state["ae_reg_index"] += 1
                     st.session_state.pop("ae_reg_ws", None)
+                    # 副作用マスタと基本情報のキャッシュのみクリア
+                    fetch_sheet_realtime.clear()
                     st.rerun()
                 else:
                     st.error(f"❌ {code} が副作用マスタに見つかりません")
