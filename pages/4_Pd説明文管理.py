@@ -194,7 +194,7 @@ else:
         f"**選択中：{protocol_no}　"
         f"{selected_basic_pd.get('レジメン名','')}**"
     )
-   if existing_cats:
+    if existing_cats:
         st.info(f"現在の設定：{' | '.join(existing_cats)}")
     else:
         st.info("現在、Pdカテゴリは未設定です。")
