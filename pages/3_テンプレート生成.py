@@ -2038,10 +2038,11 @@ if selected_basic:
     ]))
 
     if cancer_drug_codes:
-        # 副作用マスタはキャッシュを使用（429対策）
+        # 副作用マスタを最新取得（1分キャッシュ）
+        ae_data_status = fetch_sheet_realtime("抗がん剤副作用マスタ")
         ae_dict = {
             str(r.get('管理コード', '')).strip(): r
-            for r in ae_data
+            for r in ae_data_status
         }
         # 登録済み・未登録に分類
         registered   = []
@@ -2064,7 +2065,22 @@ if selected_basic:
                 unregistered.append({'code': code, 'name': name})
 
         st.divider()
-        st.subheader("📊 抗がん剤副作用マスタ 登録状況")
+        col_ae_hd, col_ae_ref = st.columns([4, 1])
+        with col_ae_hd:
+            st.subheader("📊 抗がん剤副作用マスタ 登録状況")
+        with col_ae_ref:
+            if st.button(
+                "🔄 最新化",
+                key="btn_refresh_ae_status",
+                help="副作用マスタの登録状況を最新データに更新します"
+            ):
+                fetch_sheet_realtime.clear()
+                for _k in list(st.session_state.keys()):
+                    if (_k.startswith("ae_") or
+                        _k.startswith("cb_") or
+                        _k.startswith("pd_confirm_")):
+                        del st.session_state[_k]
+                st.rerun()
 
         if unregistered:
             st.warning(f"⚠️ 副作用が未登録の薬剤が {len(unregistered)} 件あります")
