@@ -250,7 +250,10 @@ def show_pd_confirm_ui(protocol_no, drug_data, ae_data, pd_data, master_data, ba
             for c in trigger.split('|'):
                 code_to_pdid[c.strip()] = cat_id
         else:
-            trigger_to_pdid[trigger] = cat_id
+            # 1対多に対応（同じトリガーに複数のPdIDを紐づける）
+            if trigger not in trigger_to_pdid:
+                trigger_to_pdid[trigger] = []
+            trigger_to_pdid[trigger].append(cat_id)
 
     # ---------- 副作用マスタを最新取得（fetch_sheet_realtimeで毎回更新）----------
     ae_data_fresh = fetch_sheet_realtime("抗がん剤副作用マスタ")
@@ -289,8 +292,8 @@ def show_pd_confirm_ui(protocol_no, drug_data, ae_data, pd_data, master_data, ba
         # 副作用列から判定
         for col in ae_columns:
             if str(ae_row.get(col, '')).strip() == '○':
-                pd_id = trigger_to_pdid.get(col)
-                if pd_id:
+                pd_ids = trigger_to_pdid.get(col, [])
+                for pd_id in pd_ids:
                     if pd_id not in pd_evidence:
                         pd_evidence[pd_id] = []
                     # 重複しないように追加
