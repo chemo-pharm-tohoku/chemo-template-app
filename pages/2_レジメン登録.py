@@ -300,19 +300,24 @@ if "parsed_data" in st.session_state:
                 ws_log.append_row(log_row, value_input_option="USER_ENTERED")
 
             st.success(f"✅ {protocol_no} を{operation}しました！")
-            st.balloons()
             # ===== テンプレート生成ページへのボタン =====
             st.divider()
+            st.info("続けてどうしますか？")
             col1, col2 = st.columns(2)
             with col1:
-                st.info("続けてテンプレートを生成しますか？")
-            with col2:
-                if st.button("📊 テンプレート生成ページへ", type="primary"):
-                    st.session_state.clear()
+                if st.button(
+                    "📊 テンプレート生成ページへ",
+                    type="primary",
+                    use_container_width=True
+                ):
                     st.switch_page("pages/3_テンプレート生成.py")
-            if st.button("🔄 続けて別のレジメンを登録する"):
-                st.session_state.clear()
-                st.rerun()
+            with col2:
+                if st.button(
+                    "🔄 続けて別のレジメンを登録する",
+                    use_container_width=True
+                ):
+                    st.session_state.clear()
+                    st.rerun()
             
 
         except Exception as e:
