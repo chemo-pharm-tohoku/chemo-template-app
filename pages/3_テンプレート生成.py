@@ -380,21 +380,6 @@ def show_ae_register_ui(unregistered, ae_data, master_data, drug_data, basic_dat
     # ae_dataをコードで引けるように辞書化
     ae_dict_reg = {str(r.get("管理コード","")).strip(): r for r in ae_data}
 
-    # スプレッドシート接続はセッションにキャッシュ
-    if "ae_reg_ws" not in st.session_state:
-        _gc       = get_gspread_client()
-        _ss       = _gc.open_by_url(SPREADSHEET_URL)
-        _ws_ae    = _ss.worksheet("抗がん剤副作用マスタ")
-        _ws_basic = _ss.worksheet("基本情報")
-        _ae_all   = _ws_ae.get_all_values()
-        st.session_state["ae_reg_ws"] = {
-            "ws_ae"   : _ws_ae,
-            "ws_basic": _ws_basic,
-            "ae_all"  : _ae_all,
-        }
-    ws_ae    = st.session_state["ae_reg_ws"]["ws_ae"]
-    ws_basic = st.session_state["ae_reg_ws"]["ws_basic"]
-    ae_all   = st.session_state["ae_reg_ws"]["ae_all"]
 
     # セッション初期化
     if "ae_reg_index" not in st.session_state:
@@ -411,7 +396,18 @@ def show_ae_register_ui(unregistered, ae_data, master_data, drug_data, basic_dat
         # Pdカテゴリ自動更新
         with st.spinner("Pdカテゴリを自動更新中..."):
             try:
-                ws_pd_sh    = ss.worksheet("Pd")
+                import time
+                for attempt in range(3):
+                    try:
+                        _gc2     = get_gspread_client()
+                        _ss2     = _gc2.open_by_url(SPREADSHEET_URL)
+                        ws_pd_sh = _ss2.worksheet("Pd")
+                        break
+                    except Exception as _e:
+                        if "429" in str(_e) and attempt < 2:
+                            time.sleep(15*(attempt+1))
+                        else:
+                            raise _e
                 pd_data_new = ws_pd_sh.get_all_records()
                 ae_data_new = ws_ae.get_all_records()
 
@@ -610,7 +606,25 @@ def show_ae_register_ui(unregistered, ae_data, master_data, drug_data, basic_dat
         ):
             try:
                 from datetime import date
+                import time
                 today = date.today().strftime("%Y/%m/%d")
+
+                # 登録ボタン押下時にのみAPI接続
+                with st.spinner("スプレッドシートに接続中..."):
+                    for attempt in range(3):
+                        try:
+                            _gc3     = get_gspread_client()
+                            _ss3     = _gc3.open_by_url(SPREADSHEET_URL)
+                            ws_ae    = _ss3.worksheet("抗がん剤副作用マスタ")
+                            ws_basic = _ss3.worksheet("基本情報")
+                            ae_all   = ws_ae.get_all_values()
+                            break
+                        except Exception as _e3:
+                            if "429" in str(_e3) and attempt < 2:
+                                st.warning(f"APIレート制限中... {15*(attempt+1)}秒後に再試行")
+                                time.sleep(15 * (attempt + 1))
+                            else:
+                                raise _e3
 
                 # 副作用マスタの行を探して更新
                 ae_codes = [row[0] for row in ae_all]
