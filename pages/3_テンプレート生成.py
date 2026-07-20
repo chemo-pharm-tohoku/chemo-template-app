@@ -689,7 +689,7 @@ def show_ae_register_ui(unregistered, ae_data, master_data, drug_data, basic_dat
                     st.session_state["ae_reg_done"].append(code)
                     st.session_state["ae_reg_index"] += 1
                     st.session_state.pop("ae_reg_ws", None)
-                    # 副作用マスタと基本情報のキャッシュのみクリア
+                    # 副作用マスタキャッシュをクリアして最新データを反映
                     fetch_sheet_realtime.clear()
                     st.rerun()
                 else:
