@@ -227,18 +227,14 @@ def show_pd_confirm_ui(protocol_no, drug_data, ae_data, pd_data, master_data, ba
         else:
             trigger_to_pdid[trigger] = cat_id
 
-    # ---------- 副作用マスタをリアルタイム取得 ----------
-    try:
-        gc_rt      = get_gspread_client()
-        ss_rt      = gc_rt.open_by_url(SPREADSHEET_URL)
-        ws_ae_rt   = ss_rt.worksheet("抗がん剤副作用マスタ")
-        ae_data_rt = ws_ae_rt.get_all_records()
-        ws_basic   = ss_rt.worksheet("基本情報")
-    except Exception as e:
-        st.error(f"データ取得エラー: {e}")
-        return
+    # ---------- 副作用マスタはキャッシュを使用（API接続なし）----------
+    ae_dict = {str(r.get("管理コード", "")).strip(): r for r in ae_data}
+    ae_columns = [k for k in ae_data[0].keys()
+                  if k not in ("管理コード", "一般名（全角）", "登録日")
+                  ] if ae_data else []
 
-    ae_dict    = {str(r['管理コード']).strip(): r for r in ae_data_rt}
+
+    # ae_dict は上で定義済み
     ae_headers = ws_ae_rt.row_values(1)
     ae_columns = ae_headers[2:-1]
 
@@ -348,6 +344,20 @@ def show_pd_confirm_ui(protocol_no, drug_data, ae_data, pd_data, master_data, ba
         key=f"btn_pd_confirm_{protocol_no}"
     ):
         try:
+            import time
+            with st.spinner("スプレッドシートを更新中..."):
+                for attempt in range(3):
+                    try:
+                        _gc4     = get_gspread_client()
+                        _ss4     = _gc4.open_by_url(SPREADSHEET_URL)
+                        ws_basic = _ss4.worksheet("基本情報")
+                        break
+                    except Exception as _e4:
+                        if "429" in str(_e4) and attempt < 2:
+                            st.warning(f"API制限中... {15*(attempt+1)}秒後に再試行")
+                            time.sleep(15 * (attempt + 1))
+                        else:
+                            raise _e4
             basic_codes = ws_basic.col_values(1)
             if protocol_no in basic_codes:
                 row_idx = basic_codes.index(protocol_no) + 1
@@ -2007,12 +2017,12 @@ if selected_basic:
             gc_rt  = get_gspread_client()
             ss_rt  = gc_rt.open_by_url(SPREADSHEET_URL)
             ws_rt  = ss_rt.worksheet("抗がん剤副作用マスタ")
-            ae_data_rt = ws_rt.get_all_records()
+            ae_data = ws_rt.get_all_records()
         except Exception:
-            ae_data_rt = ae_data  # 失敗時はキャッシュを使用
+            ae_data = ae_data  # 失敗時はキャッシュを使用
         ae_dict = {
             str(r.get('管理コード', '')).strip(): r
-            for r in ae_data_rt
+            for r in ae_data
         }
         # 登録済み・未登録に分類
         registered   = []
