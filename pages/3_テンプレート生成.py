@@ -397,55 +397,61 @@ def show_ae_register_ui(unregistered, ae_data, master_data, drug_data, basic_dat
         with st.spinner("Pdカテゴリを自動更新中..."):
             try:
                 import time
+                # ws_basicのみAPI接続（最小限）
                 for attempt in range(3):
                     try:
                         _gc2     = get_gspread_client()
                         _ss2     = _gc2.open_by_url(SPREADSHEET_URL)
-                        ws_pd_sh = _ss2.worksheet("Pd")
+                        ws_basic_new = _ss2.worksheet("基本情報")
                         break
                     except Exception as _e:
                         if "429" in str(_e) and attempt < 2:
                             time.sleep(15*(attempt+1))
                         else:
                             raise _e
-                pd_data_new = ws_pd_sh.get_all_records()
-                ae_data_new = ws_ae.get_all_records()
+
+                # pd_dataとae_dataはキャッシュを使用
+                pd_data_new = pd_data
+                ae_data_new = ae_data
 
                 trigger_to_pdid = {}
                 code_to_pdid    = {}
                 priority_dict   = {}
                 for p in pd_data_new:
-                    trigger = str(p.get('トリガーキーワード', '')).strip()
-                    cat_id  = str(p.get('カテゴリID', '')).strip()
+                    trigger = str(p.get("トリガーキーワード", "")).strip()
+                    cat_id  = str(p.get("カテゴリID", "")).strip()
                     try:
-                        priority_dict[cat_id] = int(p.get('優先順位', 99))
+                        priority_dict[cat_id] = int(p.get("優先順位", 99))
                     except:
                         priority_dict[cat_id] = 99
-                    if not trigger or trigger == '手動設定':
+                    if not trigger or trigger == "手動設定":
                         continue
-                    if trigger.startswith('AC'):
-                        for c in trigger.split('|'):
+                    if trigger.startswith("AC"):
+                        for c in trigger.split("|"):
                             code_to_pdid[c.strip()] = cat_id
                     else:
                         trigger_to_pdid[trigger] = cat_id
 
-                ae_dict_new = {str(r['管理コード']).strip(): r for r in ae_data_new}
-                ae_cols_new = ws_ae.row_values(1)[2:-1]
+                ae_dict_new = {str(r["管理コード"]).strip(): r for r in ae_data_new}
+                # ae_columnsはae_dataのキーから取得
+                ae_cols_new = [k for k in ae_data_new[0].keys()
+                               if k not in ("管理コード", "一般名（全角）", "登録日")
+                               ] if ae_data_new else ae_columns
 
                 # このレジメンのPdカテゴリを再計算
-                protocol_no = st.session_state.get("current_protocol_no", "")
-                if protocol_no:
+                protocol_no_upd = st.session_state.get("current_protocol_no", "")
+                if protocol_no_upd:
                     reg_drugs = [
                         d for d in drug_data
-                        if str(d.get('プロトコールNo', '')).strip() == protocol_no
+                        if str(d.get("プロトコールNo", "")).strip() == protocol_no_upd
                     ]
                     collected = set()
                     for drug in reg_drugs:
-                        drug_code = str(drug.get('管理コード', '')).strip()
+                        drug_code = str(drug.get("管理コード", "")).strip()
                         ae_row = ae_dict_new.get(drug_code)
                         if ae_row:
                             for col in ae_cols_new:
-                                if str(ae_row.get(col, '')).strip() == '○':
+                                if str(ae_row.get(col, "")).strip() == "○":
                                     pd_id = trigger_to_pdid.get(col)
                                     if pd_id:
                                         collected.add(pd_id)
@@ -453,13 +459,13 @@ def show_ae_register_ui(unregistered, ae_data, master_data, drug_data, basic_dat
                             collected.add(code_to_pdid[drug_code])
 
                     sorted_ids  = sorted(collected, key=lambda x: priority_dict.get(x, 99))
-                    pd_category = '|'.join(sorted_ids)
+                    pd_category = "|".join(sorted_ids)
 
                     if pd_category:
-                        basic_codes = ws_basic.col_values(1)
-                        if protocol_no in basic_codes:
-                            row_idx = basic_codes.index(protocol_no) + 1
-                            ws_basic.update_cell(row_idx, 12, pd_category)
+                        basic_codes = ws_basic_new.col_values(1)
+                        if protocol_no_upd in basic_codes:
+                            row_idx = basic_codes.index(protocol_no_upd) + 1
+                            ws_basic_new.update_cell(row_idx, 12, pd_category)
                             st.success(f"✅ Pdカテゴリを更新しました：{pd_category}")
 
                 # キャッシュクリア
