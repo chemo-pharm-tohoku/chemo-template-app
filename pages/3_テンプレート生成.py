@@ -304,14 +304,27 @@ def show_ae_register_ui(unregistered, ae_data, master_data, drug_data, basic_dat
 
     # ---------- NotebookLM指示文 ----------
     with st.expander("📋 NotebookLMで抽出する場合はこちら", expanded=False):
-        st.markdown("**① 以下の定義書に従ってNotebookLMに指示してください**")
-        st.code(
+        NOTEBOOKLM_URL = "https://notebooklm.google.com/"
+        DEFINITION_URL = (
+            "https://raw.githubusercontent.com/"
+            "chemo-pharm-tohoku/chemo-template-app/main/"
+            "%E5%89%AF%E4%BD%9C%E7%94%A8%E6%8A%BD%E5%87%BA%E5%AE%9A%E7%BE%A9%E6%9B%B8260720.txt"
+        )
+        st.markdown(
+            f"**① [NotebookLMを開く]({NOTEBOOKLM_URL})** に "
+            f"**[副作用抽出定義書をダウンロード]({DEFINITION_URL})** と "
+            f"添付文書PDFをアップロードしてください"
+        )
+        st.divider()
+        st.markdown("**② 以下の指示文をNotebookLMに貼り付けてください**")
+        instruction = (
             f"副作用抽出定義書に従い、{name}の添付文書から\n"
             f"副作用情報を抽出しCSV形式で出力してください。\n"
-            f"管理コードは「{code}」を使用してください。",
-            language="text"
+            f"管理コードは「{code}」を使用してください。"
         )
-        st.markdown("**② 出力されたCSVをここに貼り付けてください**")
+        st.code(instruction, language="text")
+        st.divider()
+        st.markdown("**③ 出力されたCSVをここに貼り付けてください**")
 
         csv_input = st.text_input(
             "CSVを貼り付け（例：AC999,イピリムマブ,○,○,,,,,○）",
