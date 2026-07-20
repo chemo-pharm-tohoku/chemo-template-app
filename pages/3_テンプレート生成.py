@@ -197,6 +197,172 @@ def get_regimen(protocol_no, basic_data, drug_data, master_data):
 
 
 # ===== 追加：副作用登録UI関数 =====
+
+def show_pd_confirm_ui(protocol_no, drug_data, ae_data, pd_data, master_data, basic_data):
+    """
+    副作用マスタから算出したPdカテゴリを確認・編集するUI
+    各Pdカテゴリの根拠薬剤名と登録日を表示
+    不要なカテゴリを外してから確定できる
+    """
+    st.divider()
+    st.subheader("📋 Pdカテゴリ確認・編集")
+    st.caption("副作用マスタから自動算出した結果です。不要な項目を外してから確定してください。")
+
+    # ---------- 対応表作成 ----------
+    trigger_to_pdid = {}
+    code_to_pdid    = {}
+    priority_dict   = {}
+    for p in pd_data:
+        trigger = str(p.get('トリガーキーワード', '')).strip()
+        cat_id  = str(p.get('カテゴリID', '')).strip()
+        try:
+            priority_dict[cat_id] = int(p.get('優先順位', 99))
+        except:
+            priority_dict[cat_id] = 99
+        if not trigger or trigger == '手動設定':
+            continue
+        if trigger.startswith('AC'):
+            for c in trigger.split('|'):
+                code_to_pdid[c.strip()] = cat_id
+        else:
+            trigger_to_pdid[trigger] = cat_id
+
+    # ---------- 副作用マスタをリアルタイム取得 ----------
+    try:
+        gc_rt      = get_gspread_client()
+        ss_rt      = gc_rt.open_by_url(SPREADSHEET_URL)
+        ws_ae_rt   = ss_rt.worksheet("抗がん剤副作用マスタ")
+        ae_data_rt = ws_ae_rt.get_all_records()
+        ws_basic   = ss_rt.worksheet("基本情報")
+    except Exception as e:
+        st.error(f"データ取得エラー: {e}")
+        return
+
+    ae_dict    = {str(r['管理コード']).strip(): r for r in ae_data_rt}
+    ae_headers = ws_ae_rt.row_values(1)
+    ae_columns = ae_headers[2:-1]
+
+    # ---------- レジメンの薬剤を取得 ----------
+    regimen_drugs = [
+        d for d in drug_data
+        if str(d.get('プロトコールNo', '')).strip() == protocol_no
+    ]
+    cancer_codes = list(dict.fromkeys([
+        str(d.get('管理コード', '')).strip()
+        for d in regimen_drugs
+        if str(d.get('管理コード', '')).strip().startswith('AC')
+    ]))
+
+    # ---------- PdカテゴリIDと根拠薬剤のマッピング ----------
+    # {cat_id: [{name, reg_date}, ...]}
+    pd_evidence = {}
+
+    for drug_code in cancer_codes:
+        ae_row = ae_dict.get(drug_code, {})
+        drug_name = next(
+            (m.get('一般名（全角）', drug_code)
+             for m in master_data
+             if str(m.get('管理コード', '')).strip() == drug_code),
+            drug_code
+        )
+        reg_date = str(ae_row.get('登録日', '')).strip()
+
+        # 副作用列から判定
+        for col in ae_columns:
+            if str(ae_row.get(col, '')).strip() == '○':
+                pd_id = trigger_to_pdid.get(col)
+                if pd_id:
+                    if pd_id not in pd_evidence:
+                        pd_evidence[pd_id] = []
+                    # 重複しないように追加
+                    if not any(e['name'] == drug_name for e in pd_evidence[pd_id]):
+                        pd_evidence[pd_id].append({
+                            'name': drug_name,
+                            'date': reg_date
+                        })
+
+        # 管理コードから判定（PDC系）
+        if drug_code in code_to_pdid:
+            pd_id = code_to_pdid[drug_code]
+            if pd_id not in pd_evidence:
+                pd_evidence[pd_id] = []
+            if not any(e['name'] == drug_name for e in pd_evidence[pd_id]):
+                pd_evidence[pd_id].append({
+                    'name': drug_name,
+                    'date': reg_date
+                })
+
+    if not pd_evidence:
+        st.warning("副作用マスタから算出できるPdカテゴリがありません。")
+        st.info("副作用マスタへの登録が完了していない薬剤がある可能性があります。")
+        return
+
+    # ---------- 優先順位でソート ----------
+    sorted_pd_ids = sorted(pd_evidence.keys(), key=lambda x: priority_dict.get(x, 99))
+
+    # ---------- チェックボックスで表示 ----------
+    st.markdown("**確定するPdカテゴリを選択してください：**")
+
+    selected_ids = []
+    for pd_id in sorted_pd_ids:
+        pd_name = next(
+            (p['カテゴリ名'] for p in pd_data if p['カテゴリID'] == pd_id), pd_id
+        )
+        prio = priority_dict.get(pd_id, 99)
+        cb_key = f"pd_confirm_{protocol_no}_{pd_id}"
+
+        # デフォルトはTrue（全て選択）
+        if cb_key not in st.session_state:
+            st.session_state[cb_key] = True
+
+        col_cb, col_info = st.columns([1, 4])
+        with col_cb:
+            checked = st.checkbox(
+                f"**{pd_id}**",
+                value=st.session_state[cb_key],
+                key=cb_key
+            )
+        with col_info:
+            st.markdown(f"**{pd_name}**")
+            evidence_list = pd_evidence[pd_id]
+            for ev in evidence_list:
+                date_str = f"（{ev['date']} 登録）" if ev['date'] else "（登録日不明）"
+                st.caption(f"　　{ev['name']} {date_str}")
+
+        if checked:
+            selected_ids.append(pd_id)
+
+    # ---------- 確定ボタン ----------
+    st.divider()
+    if selected_ids:
+        pd_category = '|'.join(sorted(selected_ids, key=lambda x: priority_dict.get(x, 99)))
+        st.info(f"確定するPdカテゴリ：**{pd_category}**")
+    else:
+        st.warning("Pdカテゴリが選択されていません")
+        pd_category = ''
+
+    if st.button(
+        "✅ Pdカテゴリを確定する",
+        type="primary",
+        use_container_width=True,
+        key=f"btn_pd_confirm_{protocol_no}"
+    ):
+        try:
+            basic_codes = ws_basic.col_values(1)
+            if protocol_no in basic_codes:
+                row_idx = basic_codes.index(protocol_no) + 1
+                ws_basic.update_cell(row_idx, 12, pd_category)
+                st.success(f"✅ Pdカテゴリを確定しました：{pd_category}")
+                st.cache_data.clear()
+                # セッションクリア
+                st.session_state.pop("ae_reg_start", None)
+                st.session_state.pop("ae_reg_index", None)
+                st.session_state.pop("show_pd_confirm", None)
+                st.session_state["pd_confirmed"] = True
+                st.rerun()
+        except Exception as e:
+            st.error(f"更新エラー: {e}")
+
 def show_ae_register_ui(unregistered, ae_data, master_data, drug_data, basic_data, pd_data):
     """未登録薬剤の副作用をその場で登録するUI"""
 
@@ -291,7 +457,9 @@ def show_ae_register_ui(unregistered, ae_data, master_data, drug_data, basic_dat
             except Exception as e:
                 st.warning(f"⚠️ Pdカテゴリ更新エラー: {e}")
 
-        st.info("ファイル生成に進んでください")
+        # Pdカテゴリ確認UIへ
+        st.session_state["show_pd_confirm"] = True
+        st.rerun()
         return
 
     # 現在登録する薬剤
@@ -1860,10 +2028,11 @@ if selected_basic:
                         st.session_state["current_protocol_no"] = protocol_no
                 with col_skip:
                     if st.button(
-                        "⏭️ スキップしてファイル生成へ（データ最新化）",
+                        "⏭️ スキップしてPdカテゴリ確認へ",
                         use_container_width=True,
                     ):
                         st.cache_data.clear()
+                        st.session_state["show_pd_confirm"] = True
                         st.session_state["ae_skip"] = True
                         st.rerun()
 
@@ -1873,6 +2042,18 @@ if selected_basic:
                 unregistered, ae_data, master_data,
                 drug_data, basic_data, pd_data
             )
+
+    # Pdカテゴリ確認UI表示（登録完了後 or スキップ後）
+    if st.session_state.get("show_pd_confirm", False):
+        show_pd_confirm_ui(
+            protocol_no, drug_data, ae_data,
+            pd_data, master_data, basic_data
+        )
+
+    # 確定完了メッセージ
+    if st.session_state.get("pd_confirmed", False):
+        st.success("✅ Pdカテゴリが確定されました！ファイル生成へお進みください。")
+        st.session_state.pop("pd_confirmed", None)
 
 st.divider()
 st.subheader("📁 ファイル生成")
