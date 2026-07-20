@@ -227,6 +227,67 @@ if "parsed_data" in st.session_state:
                     ]
                     ws_drug.append_row(drug_row, value_input_option="USER_ENTERED")
 
+                # ===== Pdカテゴリ自動設定 =====
+                try:
+                    ws_ae     = sh.worksheet("抗がん剤副作用マスタ")
+                    ws_pd_sh  = sh.worksheet("Pd")
+                    ae_data   = ws_ae.get_all_records()
+                    pd_data   = ws_pd_sh.get_all_records()
+
+                    # トリガー対応表作成
+                    trigger_to_pdid = {}
+                    code_to_pdid    = {}
+                    priority_dict   = {}
+                    for p in pd_data:
+                        trigger = str(p.get('トリガーキーワード', '')).strip()
+                        cat_id  = str(p.get('カテゴリID', '')).strip()
+                        try:
+                            priority_dict[cat_id] = int(p.get('優先順位', 99))
+                        except:
+                            priority_dict[cat_id] = 99
+                        if not trigger or trigger == '手動設定':
+                            continue
+                        if trigger.startswith('AC'):
+                            for c in trigger.split('|'):
+                                code_to_pdid[c.strip()] = cat_id
+                        else:
+                            trigger_to_pdid[trigger] = cat_id
+
+                    ae_dict    = {str(r['管理コード']).strip(): r for r in ae_data}
+                    ae_headers = ws_ae.row_values(1)
+                    ae_columns = ae_headers[2:]
+
+                    # 薬剤コードから副作用→PdカテゴリIDを収集
+                    collected = set()
+                    for drug in drugs:
+                        drug_code = str(get_val(drug, 'management_code')).strip()
+                        ae_row = ae_dict.get(drug_code)
+                        if ae_row:
+                            for col in ae_columns:
+                                if str(ae_row.get(col, '')).strip() == '○':
+                                    pd_id = trigger_to_pdid.get(col)
+                                    if pd_id:
+                                        collected.add(pd_id)
+                        if drug_code in code_to_pdid:
+                            collected.add(code_to_pdid[drug_code])
+
+                    # 優先順位でソート
+                    sorted_ids = sorted(
+                        collected,
+                        key=lambda x: priority_dict.get(x, 99)
+                    )
+                    pd_category = '|'.join(sorted_ids)
+
+                    # 基本情報L列（12列目）に書き込み
+                    if pd_category:
+                        existing_basic = ws_basic.col_values(1)
+                        if protocol_no in existing_basic:
+                            basic_row_idx = existing_basic.index(protocol_no) + 1
+                            ws_basic.update_cell(basic_row_idx, 12, pd_category)
+
+                except Exception as pd_e:
+                    st.warning(f"⚠️ Pdカテゴリ自動設定でエラー: {pd_e}")
+
                 # ログ記録
                 operation = "上書き登録" if overwrite else "新規登録"
                 log_row = [
