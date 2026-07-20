@@ -63,6 +63,17 @@ def load_master_data():
         st.error(f"薬品マスタの取得に失敗しました: {e}")
         return []
 
+
+@st.cache_data(ttl=60)
+def load_ae_data():
+    try:
+        sh = get_spreadsheet()
+        ws = sh.worksheet("抗がん剤副作用マスタ")
+        return ws.get_all_records()
+    except Exception as e:
+        st.error(f"副作用マスタの取得に失敗しました: {e}")
+        return []
+        
 # ===== 種別をIDから取得 =====
 def get_kind(item):
     cat_id = str(item.get("カテゴリID", ""))
@@ -119,6 +130,7 @@ with st.spinner("データを読み込み中..."):
     basic_data  = load_basic_data()
     drug_data   = load_drug_data()
     master_data = load_master_data()
+    ae_data     = load_ae_data()
 
 # ===== Pdカテゴリ紐付けセクション =====
 st.subheader("🔗 レジメンへのPdカテゴリ紐付け")
@@ -218,6 +230,35 @@ else:
                 value=default_val,
                 key=f"cat_{protocol_no}_{cat_id}"
             )
+             # レジメンの関連薬剤を表示
+            ae_dict_4 = {str(r.get("管理コード","")).strip(): r for r in ae_data}
+            ae_cols_4 = [k for k in ae_data[0].keys()
+                         if k not in ("管理コード","一般名（全角）","登録日")
+                         ] if ae_data else []
+            trigger_str = str(item.get("トリガーキーワード","")).strip()
+
+            for drug in regimen_drugs:
+                d_code   = str(drug.get('管理コード','')).strip()
+                d_master = master_dict.get(d_code, {})
+                d_name   = str(d_master.get('一般名（全角）', d_code))
+                ae_row   = ae_dict_4.get(d_code, {})
+                reg_date = str(ae_row.get('登録日','')).strip()
+
+                matched = False
+                if trigger_str.startswith('AC'):
+                    if d_code in [t.strip() for t in trigger_str.split('|')]:
+                        matched = True
+                elif trigger_str not in ('', '手動設定'):
+                    for ae_col in ae_cols_4:
+                        if ae_col in trigger_str:
+                            if str(ae_row.get(ae_col,'')).strip() == '○':
+                                matched = True
+                                break
+
+                if matched:
+                    date_str = f"{reg_date} 登録" if reg_date else "**未登録**"
+                    st.caption(f"　　　　{d_name}（{date_str}）")
+
             if checked:
                 selected_cats.append(cat_id)
         st.markdown("---")
