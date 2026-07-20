@@ -1964,6 +1964,13 @@ if selected is None:
 
 protocol_no = selected.split('　')[0].strip()
 
+# レジメンが切り替わったらセッションをリセット
+if st.session_state.get("last_protocol_no") != protocol_no:
+    for key in list(st.session_state.keys()):
+        if key.startswith("ae_") or key.startswith("cb_") or key.startswith("pd_confirm_"):
+            del st.session_state[key]
+    st.session_state["last_protocol_no"] = protocol_no
+
 selected_basic = next(
     (b for b in basic_data if b['プロトコールNo'] == protocol_no),
     None
@@ -2049,7 +2056,9 @@ if selected_basic:
         if unregistered:
             st.divider()
             # 未登録薬剤は最初から登録UI表示
-            if not st.session_state.get("ae_reg_start", False):
+            # current_protocol_noが違う場合もリセット
+            if (not st.session_state.get("ae_reg_start", False)
+                    or st.session_state.get("current_protocol_no") != protocol_no):
                 st.session_state["ae_reg_index"]        = 0
                 st.session_state["ae_reg_start"]        = True
                 st.session_state["ae_unregistered"]     = unregistered
