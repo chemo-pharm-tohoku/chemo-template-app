@@ -2067,12 +2067,12 @@ if selected_basic:
                         st.session_state["current_protocol_no"] = protocol_no
                 with col_skip:
                     if st.button(
-                        "⏭️ スキップしてPdカテゴリ確認へ",
+                        "⏭️ スキップしてファイル生成へ",
                         use_container_width=True,
                     ):
                         st.cache_data.clear()
-                        st.session_state["show_pd_confirm"] = True
                         st.session_state["ae_skip"] = True
+                        st.session_state.pop("ae_reg_start", None)
                         st.rerun()
 
         # 副作用登録UI表示
@@ -2082,8 +2082,8 @@ if selected_basic:
                 drug_data, basic_data, pd_data
             )
 
-    # Pdカテゴリ確認UI表示（登録完了後 or スキップ後）
-    if st.session_state.get("show_pd_confirm", False):
+    # Pdカテゴリ確認UI（副作用登録UI表示中でなければ常時表示）
+    if not st.session_state.get("ae_reg_start", False):
         show_pd_confirm_ui(
             protocol_no, drug_data, ae_data,
             pd_data, master_data, basic_data
