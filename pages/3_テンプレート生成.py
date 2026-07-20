@@ -357,7 +357,7 @@ def show_ae_register_ui(unregistered, ae_data, master_data, drug_data, basic_dat
                     for i, col in enumerate(ae_columns):
                         val     = parts[i + 2] if i + 2 < len(parts) else ''
                         new_val = (val == '○')
-                        key     = f"ae_{code}_{col}"
+                        key     = f"cb_{code}_{col}"
                         if st.session_state.get(key) != new_val:
                             st.session_state[key] = new_val
                             changed = True
@@ -381,12 +381,16 @@ def show_ae_register_ui(unregistered, ae_data, master_data, drug_data, basic_dat
     cols = st.columns(3)
     checked = {}
     for i, col_name in enumerate(ae_columns):
-        default = st.session_state.get(f"ae_{code}_{col_name}", False)
+        cb_key = f"cb_{code}_{col_name}"
+        ae_key = f"ae_{code}_{col_name}"
+        if ae_key in st.session_state and cb_key not in st.session_state:
+            st.session_state[cb_key] = st.session_state.pop(ae_key)
+        default = st.session_state.get(cb_key, False)
         with cols[i % 3]:
             checked[col_name] = st.checkbox(
                 col_name,
                 value=default,
-                key=f"cb_{code}_{col_name}"
+                key=cb_key
             )
 
     # ---------- 登録・スキップ・リロードボタン ----------
