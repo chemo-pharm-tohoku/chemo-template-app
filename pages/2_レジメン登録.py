@@ -251,7 +251,10 @@ if "parsed_data" in st.session_state:
                             for c in trigger.split('|'):
                                 code_to_pdid[c.strip()] = cat_id
                         else:
-                            trigger_to_pdid[trigger] = cat_id
+                            # 1対多に対応（同じトリガーに複数のPdIDを紐づける）
+                            if trigger not in trigger_to_pdid:
+                                trigger_to_pdid[trigger] = []
+                            trigger_to_pdid[trigger].append(cat_id)
 
                     ae_dict    = {str(r['管理コード']).strip(): r for r in ae_data}
                     ae_headers = ws_ae.row_values(1)
@@ -265,8 +268,8 @@ if "parsed_data" in st.session_state:
                         if ae_row:
                             for col in ae_columns:
                                 if str(ae_row.get(col, '')).strip() == '○':
-                                    pd_id = trigger_to_pdid.get(col)
-                                    if pd_id:
+                                    pd_ids = trigger_to_pdid.get(col, [])
+                                    for pd_id in pd_ids:
                                         collected.add(pd_id)
                         if drug_code in code_to_pdid:
                             collected.add(code_to_pdid[drug_code])
