@@ -352,14 +352,29 @@ def show_ae_register_ui(unregistered, ae_data, master_data, drug_data, basic_dat
             try:
                 parts = [p.strip() for p in csv_input.split(',')]
                 if len(parts) >= len(ae_columns) + 2:
+                    # セッションに保存してrerunで反映
+                    changed = False
                     for i, col in enumerate(ae_columns):
-                        val = parts[i + 2] if i + 2 < len(parts) else ''
-                        st.session_state[f"ae_{code}_{col}"] = (val == '○')
-                    st.success("✅ CSVから副作用情報を反映しました。下のチェックボックスを確認してください。")
+                        val     = parts[i + 2] if i + 2 < len(parts) else ''
+                        new_val = (val == '○')
+                        key     = f"ae_{code}_{col}"
+                        if st.session_state.get(key) != new_val:
+                            st.session_state[key] = new_val
+                            changed = True
+                    if changed:
+                        st.session_state[f"csv_applied_{code}"] = True
+                        st.rerun()
+                    else:
+                        st.success("✅ CSVの内容は既に反映済みです。下のチェックボックスを確認してください。")
                 else:
                     st.warning(f"⚠️ CSV列数が不足しています（{len(parts)}列、必要：{len(ae_columns)+2}列）")
             except Exception as e:
                 st.warning(f"⚠️ CSV解析エラー: {e}")
+
+        # CSV反映完了メッセージ
+        if st.session_state.get(f"csv_applied_{code}"):
+            st.success("✅ CSVから副作用情報を反映しました。下のチェックボックスを確認してください。")
+            st.session_state.pop(f"csv_applied_{code}", None)
 
     # ---------- チェックボックス ----------
     st.markdown("**副作用をチェックしてください**")
@@ -374,9 +389,9 @@ def show_ae_register_ui(unregistered, ae_data, master_data, drug_data, basic_dat
                 key=f"cb_{code}_{col_name}"
             )
 
-    # ---------- 登録・スキップボタン ----------
+    # ---------- 登録・スキップ・リロードボタン ----------
     st.divider()
-    col_reg, col_skip = st.columns(2)
+    col_reg, col_skip, col_reload = st.columns(3)
 
     with col_reg:
         if st.button(
@@ -417,6 +432,14 @@ def show_ae_register_ui(unregistered, ae_data, master_data, drug_data, basic_dat
             key=f"btn_skip_{code}"
         ):
             st.session_state["ae_reg_index"] += 1
+            st.rerun()
+
+    with col_reload:
+        if st.button(
+            "🔄 画面を更新する",
+            use_container_width=True,
+            key=f"btn_reload_{code}"
+        ):
             st.rerun()
 
 # ===== 追加：Pdシート生成関数 =====
