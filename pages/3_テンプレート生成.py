@@ -195,6 +195,202 @@ def get_regimen(protocol_no, basic_data, drug_data, master_data):
     return {'basic': basic, 'drugs': drugs, 'master_dict': master_dict}
 
 
+
+# ===== 追加：副作用登録UI関数 =====
+def show_ae_register_ui(unregistered, ae_data, master_data, drug_data, basic_data, pd_data):
+    """未登録薬剤の副作用をその場で登録するUI"""
+
+    # 薬品マスタを辞書化（管理コード→レコード）
+    master_dict = {str(m['管理コード']).strip(): m for m in master_data}
+
+    # 副作用列名リスト
+    gc_client   = get_gspread_client()
+    ss          = gc_client.open_by_url(SPREADSHEET_URL)
+    ws_ae       = ss.worksheet("抗がん剤副作用マスタ")
+    ws_basic    = ss.worksheet("基本情報")
+    ae_headers  = ws_ae.row_values(1)
+    ae_columns  = ae_headers[2:-1]  # 登録日を除く副作用列
+    ae_all      = ws_ae.get_all_values()
+
+    # セッション初期化
+    if "ae_reg_index" not in st.session_state:
+        st.session_state["ae_reg_index"] = 0
+    if "ae_reg_done" not in st.session_state:
+        st.session_state["ae_reg_done"] = []
+
+    idx = st.session_state["ae_reg_index"]
+
+    # 全部完了した場合
+    if idx >= len(unregistered):
+        st.success("✅ 全薬剤の副作用登録が完了しました！")
+
+        # Pdカテゴリ自動更新
+        with st.spinner("Pdカテゴリを自動更新中..."):
+            try:
+                ws_pd_sh    = ss.worksheet("Pd")
+                pd_data_new = ws_pd_sh.get_all_records()
+                ae_data_new = ws_ae.get_all_records()
+
+                trigger_to_pdid = {}
+                code_to_pdid    = {}
+                priority_dict   = {}
+                for p in pd_data_new:
+                    trigger = str(p.get('トリガーキーワード', '')).strip()
+                    cat_id  = str(p.get('カテゴリID', '')).strip()
+                    try:
+                        priority_dict[cat_id] = int(p.get('優先順位', 99))
+                    except:
+                        priority_dict[cat_id] = 99
+                    if not trigger or trigger == '手動設定':
+                        continue
+                    if trigger.startswith('AC'):
+                        for c in trigger.split('|'):
+                            code_to_pdid[c.strip()] = cat_id
+                    else:
+                        trigger_to_pdid[trigger] = cat_id
+
+                ae_dict_new = {str(r['管理コード']).strip(): r for r in ae_data_new}
+                ae_cols_new = ws_ae.row_values(1)[2:-1]
+
+                # このレジメンのPdカテゴリを再計算
+                protocol_no = st.session_state.get("current_protocol_no", "")
+                if protocol_no:
+                    reg_drugs = [
+                        d for d in drug_data
+                        if str(d.get('プロトコールNo', '')).strip() == protocol_no
+                    ]
+                    collected = set()
+                    for drug in reg_drugs:
+                        drug_code = str(drug.get('管理コード', '')).strip()
+                        ae_row = ae_dict_new.get(drug_code)
+                        if ae_row:
+                            for col in ae_cols_new:
+                                if str(ae_row.get(col, '')).strip() == '○':
+                                    pd_id = trigger_to_pdid.get(col)
+                                    if pd_id:
+                                        collected.add(pd_id)
+                        if drug_code in code_to_pdid:
+                            collected.add(code_to_pdid[drug_code])
+
+                    sorted_ids  = sorted(collected, key=lambda x: priority_dict.get(x, 99))
+                    pd_category = '|'.join(sorted_ids)
+
+                    if pd_category:
+                        basic_codes = ws_basic.col_values(1)
+                        if protocol_no in basic_codes:
+                            row_idx = basic_codes.index(protocol_no) + 1
+                            ws_basic.update_cell(row_idx, 12, pd_category)
+                            st.success(f"✅ Pdカテゴリを更新しました：{pd_category}")
+
+                # キャッシュクリア
+                st.cache_data.clear()
+                st.session_state.pop("ae_reg_index", None)
+                st.session_state.pop("ae_reg_done", None)
+                st.session_state.pop("unregistered_drugs", None)
+
+            except Exception as e:
+                st.warning(f"⚠️ Pdカテゴリ更新エラー: {e}")
+
+        st.info("ファイル生成に進んでください")
+        return
+
+    # 現在登録する薬剤
+    drug_info = unregistered[idx]
+    code      = drug_info['code']
+    name      = drug_info['name']
+
+    st.divider()
+    st.subheader(f"💊 副作用登録 ({idx+1}/{len(unregistered)}）：{name}")
+
+    # ---------- NotebookLM指示文 ----------
+    with st.expander("📋 NotebookLMで抽出する場合はこちら", expanded=False):
+        st.markdown("**① 以下の定義書に従ってNotebookLMに指示してください**")
+        st.code(
+            f"副作用抽出定義書に従い、{name}の添付文書から\n"
+            f"副作用情報を抽出しCSV形式で出力してください。\n"
+            f"管理コードは「{code}」を使用してください。",
+            language="text"
+        )
+        st.markdown("**② 出力されたCSVをここに貼り付けてください**")
+
+        csv_input = st.text_input(
+            "CSVを貼り付け（例：AC999,イピリムマブ,○,○,,,,,○）",
+            key=f"csv_input_{code}",
+            placeholder=f"{code},{name},○,○,,,,,"
+        )
+
+        if csv_input.strip():
+            # CSVをパースしてチェックボックスに反映
+            try:
+                parts = [p.strip() for p in csv_input.split(',')]
+                if len(parts) >= len(ae_columns) + 2:
+                    for i, col in enumerate(ae_columns):
+                        val = parts[i + 2] if i + 2 < len(parts) else ''
+                        st.session_state[f"ae_{code}_{col}"] = (val == '○')
+                    st.success("✅ CSVから副作用情報を反映しました。下のチェックボックスを確認してください。")
+                else:
+                    st.warning(f"⚠️ CSV列数が不足しています（{len(parts)}列、必要：{len(ae_columns)+2}列）")
+            except Exception as e:
+                st.warning(f"⚠️ CSV解析エラー: {e}")
+
+    # ---------- チェックボックス ----------
+    st.markdown("**副作用をチェックしてください**")
+    cols = st.columns(3)
+    checked = {}
+    for i, col_name in enumerate(ae_columns):
+        default = st.session_state.get(f"ae_{code}_{col_name}", False)
+        with cols[i % 3]:
+            checked[col_name] = st.checkbox(
+                col_name,
+                value=default,
+                key=f"cb_{code}_{col_name}"
+            )
+
+    # ---------- 登録・スキップボタン ----------
+    st.divider()
+    col_reg, col_skip = st.columns(2)
+
+    with col_reg:
+        if st.button(
+            f"✅ {name} の副作用を登録する",
+            type="primary",
+            use_container_width=True,
+            key=f"btn_reg_{code}"
+        ):
+            try:
+                from datetime import date
+                today = date.today().strftime("%Y/%m/%d")
+
+                # 副作用マスタの行を探して更新
+                ae_codes = [row[0] for row in ae_all]
+                if code in ae_codes:
+                    row_idx     = ae_codes.index(code) + 1
+                    update_vals = [
+                        ['○' if checked.get(col, False) else '' for col in ae_columns]
+                        + [today]
+                    ]
+                    ws_ae.update(
+                        range_name=f'C{row_idx}:{ae_headers[-1]}{row_idx}',
+                        values=update_vals
+                    )
+                    st.success(f"✅ {name} の副作用を登録しました！")
+                    st.session_state["ae_reg_done"].append(code)
+                    st.session_state["ae_reg_index"] += 1
+                    st.rerun()
+                else:
+                    st.error(f"❌ {code} が副作用マスタに見つかりません")
+            except Exception as e:
+                st.error(f"❌ 登録エラー: {e}")
+
+    with col_skip:
+        if st.button(
+            f"⏭️ {name} をスキップ",
+            use_container_width=True,
+            key=f"btn_skip_{code}"
+        ):
+            st.session_state["ae_reg_index"] += 1
+            st.rerun()
+
 # ===== 追加：Pdシート生成関数 =====
 def build_pd_sheet(wb, protocol_no, basic_data, pd_data, master_data):
     """
@@ -1560,24 +1756,33 @@ if selected_basic:
 
         if unregistered:
             st.divider()
-            st.info("未登録の薬剤があります。副作用マスタを登録してからPdカテゴリを更新することをお勧めします。")
-            col_go, col_skip = st.columns(2)
-            with col_go:
-                if st.button(
-                    "📝 Pd説明文管理ページで副作用を登録する",
-                    use_container_width=True
-                ):
-                    # 未登録薬剤情報をセッションに保存して遷移
-                    st.session_state["unregistered_drugs"] = unregistered
-                    st.switch_page("pages/4_Pd説明文管理.py")
-            with col_skip:
-                if st.button(
-                    "⏭️ このままファイル生成へ進む（データ最新化）",
-                    use_container_width=True,
-                ):
-                    st.cache_data.clear()
-                    st.session_state["ae_skip"] = True
-                    st.rerun()
+            # 未登録薬剤をその場で登録するか確認
+            if not st.session_state.get("ae_skip", False):
+                col_go, col_skip = st.columns(2)
+                with col_go:
+                    if st.button(
+                        "📝 このページで副作用を登録する",
+                        type="primary",
+                        use_container_width=True
+                    ):
+                        st.session_state["ae_reg_index"]      = 0
+                        st.session_state["ae_reg_start"]      = True
+                        st.session_state["current_protocol_no"] = protocol_no
+                with col_skip:
+                    if st.button(
+                        "⏭️ スキップしてファイル生成へ（データ最新化）",
+                        use_container_width=True,
+                    ):
+                        st.cache_data.clear()
+                        st.session_state["ae_skip"] = True
+                        st.rerun()
+
+        # 副作用登録UI表示
+        if st.session_state.get("ae_reg_start", False):
+            show_ae_register_ui(
+                unregistered, ae_data, master_data,
+                drug_data, basic_data, pd_data
+            )
 
 st.divider()
 st.subheader("📁 ファイル生成")
