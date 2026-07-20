@@ -54,7 +54,7 @@ def fetch_sheet(sheet_name):
         st.error(f"シート「{sheet_name}」の取得に失敗: {e}")
         return []
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=60)
 def load_all_data():
     basic_data  = fetch_sheet("基本情報")
     drug_data   = fetch_sheet("薬剤情報")
@@ -1792,10 +1792,17 @@ if selected_basic:
     ]))
 
     if cancer_drug_codes:
-        # 副作用マスタを辞書化
+        # 副作用マスタをリアルタイムで取得（キャッシュなし）
+        try:
+            gc_rt  = get_gspread_client()
+            ss_rt  = gc_rt.open_by_url(SPREADSHEET_URL)
+            ws_rt  = ss_rt.worksheet("抗がん剤副作用マスタ")
+            ae_data_rt = ws_rt.get_all_records()
+        except Exception:
+            ae_data_rt = ae_data  # 失敗時はキャッシュを使用
         ae_dict = {
             str(r.get('管理コード', '')).strip(): r
-            for r in ae_data
+            for r in ae_data_rt
         }
         # 登録済み・未登録に分類
         registered   = []
