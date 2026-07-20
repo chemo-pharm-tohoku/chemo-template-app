@@ -43,7 +43,7 @@ def get_gspread_client():
     )
     return gspread.authorize(creds)
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=300)
 def fetch_sheet(sheet_name):
     try:
         gc = get_gspread_client()
@@ -54,7 +54,7 @@ def fetch_sheet(sheet_name):
         st.error(f"シート「{sheet_name}」の取得に失敗: {e}")
         return []
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=300)
 def load_all_data():
     basic_data  = fetch_sheet("基本情報")
     drug_data   = fetch_sheet("薬剤情報")
@@ -303,9 +303,14 @@ def show_pd_confirm_ui(protocol_no, drug_data, ae_data, pd_data, master_data, ba
         prio = priority_dict.get(pd_id, 99)
         cb_key = f"pd_confirm_{protocol_no}_{pd_id}"
 
-        # デフォルトはTrue（全て選択）
+        # デフォルトは基本情報L列のPdカテゴリを参照
         if cb_key not in st.session_state:
-            st.session_state[cb_key] = True
+            current_pd_cats = str(
+                next((b.get('Pdカテゴリ','') for b in basic_data
+                      if b['プロトコールNo'] == protocol_no), '')
+            ).strip()
+            current_pd_list = [x.strip() for x in current_pd_cats.split('|') if x.strip()]
+            st.session_state[cb_key] = (pd_id in current_pd_list)
 
         col_cb, col_info = st.columns([1, 4])
         with col_cb:
@@ -359,11 +364,15 @@ def show_pd_confirm_ui(protocol_no, drug_data, ae_data, pd_data, master_data, ba
                 row_idx = basic_codes.index(protocol_no) + 1
                 ws_basic.update_cell(row_idx, 12, pd_category)
                 st.success(f"✅ Pdカテゴリを確定しました：{pd_category}")
-                st.cache_data.clear()
-                # セッションクリア
+                # セッションクリア（cache_data.clearは429の原因なので削除）
                 st.session_state.pop("ae_reg_start", None)
                 st.session_state.pop("ae_reg_index", None)
+                st.session_state.pop("ae_unregistered", None)
                 st.session_state.pop("show_pd_confirm", None)
+                # pd_confirm_のキーをクリア
+                for _k in list(st.session_state.keys()):
+                    if _k.startswith(f"pd_confirm_{protocol_no}"):
+                        del st.session_state[_k]
                 st.session_state["pd_confirmed"] = True
                 st.rerun()
         except Exception as e:
@@ -474,8 +483,7 @@ def show_ae_register_ui(unregistered, ae_data, master_data, drug_data, basic_dat
                             ws_basic_new.update_cell(row_idx, 12, pd_category)
                             st.success(f"✅ Pdカテゴリを更新しました：{pd_category}")
 
-                # キャッシュクリア・セッション整理
-                st.cache_data.clear()
+                # セッション整理（cache_data.clearは429の原因なので削除）
                 st.session_state.pop("ae_reg_index", None)
                 st.session_state.pop("ae_reg_done", None)
                 st.session_state.pop("ae_reg_start", None)
@@ -2076,7 +2084,12 @@ if selected_basic:
     # 確定完了メッセージ
     if st.session_state.get("pd_confirmed", False):
         st.success("✅ Pdカテゴリが確定されました！ファイル生成へお進みください。")
-        st.session_state.pop("pd_confirmed", None)
+        if st.button("🔄 画面を最新化する", key="btn_refresh_after_confirm"):
+            st.cache_data.clear()
+            st.session_state.pop("pd_confirmed", None)
+            st.rerun()
+    else:
+        pass
 
 st.divider()
 st.subheader("📁 ファイル生成")
