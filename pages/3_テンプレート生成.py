@@ -468,11 +468,14 @@ def show_ae_register_ui(unregistered, ae_data, master_data, drug_data, basic_dat
                             ws_basic_new.update_cell(row_idx, 12, pd_category)
                             st.success(f"✅ Pdカテゴリを更新しました：{pd_category}")
 
-                # キャッシュクリア
+                # キャッシュクリア・セッション整理
                 st.cache_data.clear()
                 st.session_state.pop("ae_reg_index", None)
                 st.session_state.pop("ae_reg_done", None)
+                st.session_state.pop("ae_reg_start", None)
+                st.session_state.pop("ae_unregistered", None)
                 st.session_state.pop("unregistered_drugs", None)
+                st.session_state.pop("ae_skip", None)
 
             except Exception as e:
                 st.warning(f"⚠️ Pdカテゴリ更新エラー: {e}")
@@ -2055,35 +2058,31 @@ if selected_basic:
             st.divider()
             # 未登録薬剤をその場で登録するか確認
             if not st.session_state.get("ae_skip", False):
-                col_go, col_skip = st.columns(2)
-                with col_go:
-                    if st.button(
-                        "📝 このページで副作用を登録する",
-                        type="primary",
-                        use_container_width=True
-                    ):
-                        st.session_state["ae_reg_index"]      = 0
-                        st.session_state["ae_reg_start"]      = True
-                        st.session_state["current_protocol_no"] = protocol_no
-                with col_skip:
-                    if st.button(
-                        "⏭️ スキップしてファイル生成へ",
-                        use_container_width=True,
-                    ):
-                        st.cache_data.clear()
-                        st.session_state["ae_skip"] = True
-                        st.session_state.pop("ae_reg_start", None)
-                        st.rerun()
+                if st.button(
+                    "📝 このページで副作用を登録する",
+                    type="primary",
+                    use_container_width=True
+                ):
+                    st.session_state["ae_reg_index"]        = 0
+                    st.session_state["ae_reg_start"]        = True
+                    st.session_state["ae_unregistered"]     = unregistered
+                    st.session_state["current_protocol_no"] = protocol_no
+                    st.rerun()
+                st.caption("⏭️ 登録をスキップしてもファイル生成は可能です。")
 
         # 副作用登録UI表示
         if st.session_state.get("ae_reg_start", False):
+            # unregisteredをセッションから取得（キャッシュ古い問題を回避）
+            _unreg = st.session_state.get("ae_unregistered", unregistered)
             show_ae_register_ui(
-                unregistered, ae_data, master_data,
+                _unreg, ae_data, master_data,
                 drug_data, basic_data, pd_data
             )
 
-    # Pdカテゴリ確認UI（副作用登録UI表示中でなければ常時表示）
-    if not st.session_state.get("ae_reg_start", False):
+    # Pdカテゴリ確認UI
+    # 副作用登録中でなく、かつPdカテゴリが設定済みの場合に表示
+    if (not st.session_state.get("ae_reg_start", False)
+            and str(selected_basic.get("Pdカテゴリ", "")).strip()):
         show_pd_confirm_ui(
             protocol_no, drug_data, ae_data,
             pd_data, master_data, basic_data
