@@ -367,29 +367,34 @@ def show_ae_register_ui(unregistered, ae_data, master_data, drug_data, basic_dat
     """未登録薬剤の副作用をその場で登録するUI"""
 
     # 薬品マスタを辞書化（管理コード→レコード）
-    master_dict = {str(m['管理コード']).strip(): m for m in master_data}
+    master_dict = {str(m["管理コード"]).strip(): m for m in master_data}
 
-    # スプレッドシート接続（書き込み用）
-    # ヘッダーをセッションにキャッシュして余分なAPI呼び出しを防ぐ
-    if "ae_ss_cache" not in st.session_state:
-        gc_client  = get_gspread_client()
-        ss         = gc_client.open_by_url(SPREADSHEET_URL)
-        ws_ae      = ss.worksheet("抗がん剤副作用マスタ")
-        ws_basic   = ss.worksheet("基本情報")
-        ae_headers = ws_ae.row_values(1)
-        ae_all     = ws_ae.get_all_values()
-        st.session_state["ae_ss_cache"] = {
-            "ae_headers": ae_headers,
-            "ae_all"    : ae_all,
-        }
+    # ae_dataのキーから副作用列名を取得（API呼び出し不要）
+    if ae_data:
+        all_keys   = list(ae_data[0].keys())
+        ae_columns = [k for k in all_keys
+                      if k not in ("管理コード", "一般名（全角）", "登録日")]
     else:
-        gc_client  = get_gspread_client()
-        ss         = gc_client.open_by_url(SPREADSHEET_URL)
-        ws_ae      = ss.worksheet("抗がん剤副作用マスタ")
-        ws_basic   = ss.worksheet("基本情報")
-        ae_headers = st.session_state["ae_ss_cache"]["ae_headers"]
-        ae_all     = st.session_state["ae_ss_cache"]["ae_all"]
-    ae_columns = ae_headers[2:-1]  # 登録日を除く副作用列
+        ae_columns = ["骨髄抑制","悪心嘔吐","末梢神経障害","脱毛","下痢","手足症候群","irAE"]
+
+    # ae_dataをコードで引けるように辞書化
+    ae_dict_reg = {str(r.get("管理コード","")).strip(): r for r in ae_data}
+
+    # スプレッドシート接続はセッションにキャッシュ
+    if "ae_reg_ws" not in st.session_state:
+        _gc       = get_gspread_client()
+        _ss       = _gc.open_by_url(SPREADSHEET_URL)
+        _ws_ae    = _ss.worksheet("抗がん剤副作用マスタ")
+        _ws_basic = _ss.worksheet("基本情報")
+        _ae_all   = _ws_ae.get_all_values()
+        st.session_state["ae_reg_ws"] = {
+            "ws_ae"   : _ws_ae,
+            "ws_basic": _ws_basic,
+            "ae_all"  : _ae_all,
+        }
+    ws_ae    = st.session_state["ae_reg_ws"]["ws_ae"]
+    ws_basic = st.session_state["ae_reg_ws"]["ws_basic"]
+    ae_all   = st.session_state["ae_reg_ws"]["ae_all"]
 
     # セッション初期化
     if "ae_reg_index" not in st.session_state:
@@ -632,7 +637,7 @@ def show_ae_register_ui(unregistered, ae_data, master_data, drug_data, basic_dat
                     st.success(f"✅ {name} の副作用を登録しました！")
                     st.session_state["ae_reg_done"].append(code)
                     st.session_state["ae_reg_index"] += 1
-                    st.session_state.pop("ae_ss_cache", None)
+                    st.session_state.pop("ae_reg_ws", None)
                     st.rerun()
                 else:
                     st.error(f"❌ {code} が副作用マスタに見つかりません")
