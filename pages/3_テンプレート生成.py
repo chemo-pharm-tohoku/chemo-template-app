@@ -365,16 +365,13 @@ def show_ae_register_ui(unregistered, ae_data, master_data, drug_data, basic_dat
                         st.session_state[f"csv_applied_{code}"] = True
                         st.rerun()
                     else:
-                        st.success("✅ CSVの内容は既に反映済みです。下のチェックボックスを確認してください。")
+                        pass  # 既に反映済み
                 else:
                     st.warning(f"⚠️ CSV列数が不足しています（{len(parts)}列、必要：{len(ae_columns)+2}列）")
             except Exception as e:
                 st.warning(f"⚠️ CSV解析エラー: {e}")
 
-        # CSV反映完了メッセージ
-        if st.session_state.get(f"csv_applied_{code}"):
-            st.success("✅ CSVから副作用情報を反映しました。下のチェックボックスを確認してください。")
-            st.session_state.pop(f"csv_applied_{code}", None)
+        # CSV反映完了メッセージは削除
 
     # ---------- チェックボックス ----------
     st.markdown("**副作用をチェックしてください**")
@@ -428,15 +425,26 @@ def show_ae_register_ui(unregistered, ae_data, master_data, drug_data, basic_dat
                 # 副作用マスタの行を探して更新
                 ae_codes = [row[0] for row in ae_all]
                 if code in ae_codes:
-                    row_idx     = ae_codes.index(code) + 1
+                    row_idx = ae_codes.index(code) + 1
+                    # セッションステートから最新のチェック状態を取得
+                    final_checked = {
+                        col: st.session_state.get(f"cb_{code}_{col}", False)
+                        for col in ae_columns
+                    }
                     update_vals = [
-                        ['○' if checked.get(col, False) else '' for col in ae_columns]
+                        ['○' if final_checked.get(col, False) else '' for col in ae_columns]
                         + [today]
                     ]
+                    # 列文字を正確に指定
+                    from openpyxl.utils import get_column_letter as gcl
+                    start_col = gcl(3)
+                    end_col   = gcl(2 + len(ae_columns) + 1)
                     ws_ae.update(
-                        range_name=f'C{row_idx}:{ae_headers[-1]}{row_idx}',
+                        range_name=f'{start_col}{row_idx}:{end_col}{row_idx}',
                         values=update_vals
                     )
+                    # デバッグ用（確認後削除可）
+                    st.write(f"更新値: {update_vals}")
                     st.success(f"✅ {name} の副作用を登録しました！")
                     st.session_state["ae_reg_done"].append(code)
                     st.session_state["ae_reg_index"] += 1
