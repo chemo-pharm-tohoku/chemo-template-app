@@ -194,10 +194,48 @@ else:
         f"**選択中：{protocol_no}　"
         f"{selected_basic_pd.get('レジメン名','')}**"
     )
-    if existing_cats:
+   if existing_cats:
         st.info(f"現在の設定：{' | '.join(existing_cats)}")
     else:
         st.info("現在、Pdカテゴリは未設定です。")
+
+    # ---------- 薬品ごとの副作用登録状況 ----------
+    ae_data_4 = load_ae_data()
+    ae_dict_status = {str(r.get("管理コード","")).strip(): r for r in ae_data_4}
+    cancer_codes = list(dict.fromkeys([
+        str(d.get('管理コード','')).strip()
+        for d in regimen_drugs
+        if str(d.get('管理コード','')).strip().startswith('AC')
+    ]))
+
+    if cancer_codes:
+        st.markdown("**📊 副作用マスタ登録状況**")
+        col_reg, col_unreg = st.columns(2)
+        registered_drugs   = []
+        unregistered_drugs = []
+        for c in cancer_codes:
+            ae_row   = ae_dict_status.get(c, {})
+            reg_date = str(ae_row.get('登録日','')).strip()
+            m        = master_dict.get(c, {})
+            name     = str(m.get('一般名（全角）', c))
+            if reg_date:
+                registered_drugs.append(f"{name}：{reg_date}")
+            else:
+                unregistered_drugs.append(name)
+        with col_reg:
+            if registered_drugs:
+                st.markdown("**✅ 登録済み**")
+                for d in registered_drugs:
+                    st.caption(f"　{d}")
+        with col_unreg:
+            if unregistered_drugs:
+                st.markdown("**❌ 未登録**")
+                for d in unregistered_drugs:
+                    st.caption(f"　{d}")
+                st.warning(
+                    "未登録の薬剤があります。\n"
+                    "テンプレート生成ページから副作用登録を行ってください。"
+                )
 
     st.markdown("#### カテゴリを選択してください")
     selected_cats = []
@@ -219,7 +257,8 @@ else:
             cat_id   = str(item.get('カテゴリID', ''))
             cat_name = str(item.get('カテゴリ名', ''))
             recommended = is_recommended(item, regimen_drugs, master_dict)
-            default_val = recommended or (cat_id in existing_cats)
+            # デフォルトは基本情報L列のPdカテゴリを参照
+            default_val = cat_id in existing_cats
             label = (
                 f"⭐ {cat_id}　{cat_name}  ← おすすめ"
                 if recommended
