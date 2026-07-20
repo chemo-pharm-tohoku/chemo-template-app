@@ -301,7 +301,6 @@ if "parsed_data" in st.session_state:
 
             st.success(f"✅ {protocol_no} を{operation}しました！")
             st.balloons()
-            st.session_state.clear()
             # ===== テンプレート生成ページへのボタン =====
             st.divider()
             col1, col2 = st.columns(2)
@@ -309,7 +308,11 @@ if "parsed_data" in st.session_state:
                 st.info("続けてテンプレートを生成しますか？")
             with col2:
                 if st.button("📊 テンプレート生成ページへ", type="primary"):
+                    st.session_state.clear()
                     st.switch_page("pages/3_テンプレート生成.py")
+            if st.button("🔄 続けて別のレジメンを登録する"):
+                st.session_state.clear()
+                st.rerun()
             
 
         except Exception as e:
