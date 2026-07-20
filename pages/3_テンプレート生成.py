@@ -1498,9 +1498,6 @@ if selected_basic:
                 st.rerun()
     else:
         st.success(f"✅ Pdカテゴリ設定済み：{pd_cats}")
-        if st.button("🔄 データを最新化する", help="Pd設定後はこちらを押してください"):
-            st.cache_data.clear()
-            st.rerun()
 
     # ===== 抗がん剤副作用マスタ登録状況チェック =====
     # このレジメンの薬剤を取得
@@ -1570,12 +1567,15 @@ if selected_basic:
                     "📝 Pd説明文管理ページで副作用を登録する",
                     use_container_width=True
                 ):
+                    # 未登録薬剤情報をセッションに保存して遷移
+                    st.session_state["unregistered_drugs"] = unregistered
                     st.switch_page("pages/4_Pd説明文管理.py")
             with col_skip:
                 if st.button(
-                    "⏭️ このままファイル生成へ進む",
+                    "⏭️ このままファイル生成へ進む（データ最新化）",
                     use_container_width=True,
                 ):
+                    st.cache_data.clear()
                     st.session_state["ae_skip"] = True
                     st.rerun()
 
