@@ -252,11 +252,13 @@ def show_pd_confirm_ui(protocol_no, drug_data, ae_data, pd_data, master_data, ba
         else:
             trigger_to_pdid[trigger] = cat_id
 
-    # ---------- 副作用マスタはキャッシュを使用（API接続なし）----------
-    ae_dict = {str(r.get("管理コード", "")).strip(): r for r in ae_data}
-    ae_columns = [k for k in ae_data[0].keys()
+    # ---------- 副作用マスタを最新取得（fetch_sheet_realtimeで毎回更新）----------
+    ae_data_fresh = fetch_sheet_realtime("抗がん剤副作用マスタ")
+    ae_dict    = {str(r.get("管理コード", "")).strip(): r for r in ae_data_fresh}
+    ae_columns = [k for k in ae_data_fresh[0].keys()
                   if k not in ("管理コード", "一般名（全角）", "登録日")
-                  ] if ae_data else []
+                  ] if ae_data_fresh else []
+
 
 
     # ---------- レジメンの薬剤を取得 ----------
@@ -2038,11 +2040,10 @@ if selected_basic:
     ]))
 
     if cancer_drug_codes:
-        # 副作用マスタを最新取得（1分キャッシュ）
-        ae_data_status = fetch_sheet_realtime("抗がん剤副作用マスタ")
+        # 副作用マスタはキャッシュを使用（429対策）
         ae_dict = {
             str(r.get('管理コード', '')).strip(): r
-            for r in ae_data_status
+            for r in ae_data
         }
         # 登録済み・未登録に分類
         registered   = []
@@ -2065,22 +2066,7 @@ if selected_basic:
                 unregistered.append({'code': code, 'name': name})
 
         st.divider()
-        col_ae_hd, col_ae_ref = st.columns([4, 1])
-        with col_ae_hd:
-            st.subheader("📊 抗がん剤副作用マスタ 登録状況")
-        with col_ae_ref:
-            if st.button(
-                "🔄 最新化",
-                key="btn_refresh_ae_status",
-                help="副作用マスタの登録状況を最新データに更新します"
-            ):
-                fetch_sheet_realtime.clear()
-                for _k in list(st.session_state.keys()):
-                    if (_k.startswith("ae_") or
-                        _k.startswith("cb_") or
-                        _k.startswith("pd_confirm_")):
-                        del st.session_state[_k]
-                st.rerun()
+        st.subheader("📊 抗がん剤副作用マスタ 登録状況")
 
         if unregistered:
             st.warning(f"⚠️ 副作用が未登録の薬剤が {len(unregistered)} 件あります")
