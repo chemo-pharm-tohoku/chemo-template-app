@@ -305,15 +305,30 @@ def show_ae_register_ui(unregistered, ae_data, master_data, drug_data, basic_dat
     # ---------- NotebookLM指示文 ----------
     with st.expander("📋 NotebookLMで抽出する場合はこちら", expanded=False):
         NOTEBOOKLM_URL = "https://notebooklm.google.com/"
+        # ダウンロード強制リンク（?raw=true でファイルとして取得）
         DEFINITION_URL = (
-            "https://raw.githubusercontent.com/"
-            "chemo-pharm-tohoku/chemo-template-app/main/"
-            "%E5%89%AF%E4%BD%9C%E7%94%A8%E6%8A%BD%E5%87%BA%E5%AE%9A%E7%BE%A9%E6%9B%B8260720.txt"
+            "https://github.com/chemo-pharm-tohoku/chemo-template-app"
+            "/raw/main/%E5%89%AF%E4%BD%9C%E7%94%A8%E6%8A%BD%E5%87%BA"
+            "%E5%AE%9A%E7%BE%A9%E6%9B%B8260720.txt"
         )
+        # 薬品マスタから採用商品名（全角）を取得
+        brand_name = next(
+            (m.get('採用商品名（全角）', name)
+             for m in master_data
+             if str(m.get('管理コード', '')).strip() == code),
+            name
+        )
+        brand_display = f"{name}（{brand_name}）" if brand_name != name else name
+
         st.markdown(
-            f"**① [NotebookLMを開く]({NOTEBOOKLM_URL})** に "
-            f"**[副作用抽出定義書をダウンロード]({DEFINITION_URL})** と "
-            f"添付文書PDFをアップロードしてください"
+            f"**① [NotebookLMを開く]({NOTEBOOKLM_URL})** に以下をアップロードしてください"
+        )
+        st.info(
+            f"📄 **副作用抽出定義書** → "
+            f"[こちらからダウンロード]({DEFINITION_URL})\n\n"
+            f"📄 **{brand_display} の添付文書PDF** → "
+            f"[PMDAで検索](https://www.pmda.go.jp/PmdaSearch/iyakuSearch/) "
+            f"で「{brand_name}」を検索してダウンロード"
         )
         st.divider()
         st.markdown("**② 以下の指示文をNotebookLMに貼り付けてください**")
