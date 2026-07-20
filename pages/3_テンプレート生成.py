@@ -60,9 +60,10 @@ def load_all_data():
     drug_data   = fetch_sheet("薬剤情報")
     master_data = fetch_sheet("薬品マスタ")
     notes_data  = fetch_sheet("注意事項")
-    # ===== 追加：Pdシートを読み込む =====
     pd_data     = fetch_sheet("Pd")
-    return basic_data, drug_data, master_data, notes_data, pd_data
+    # ===== 追加：抗がん剤副作用マスタを読み込む =====
+    ae_data     = fetch_sheet("抗がん剤副作用マスタ")
+    return basic_data, drug_data, master_data, notes_data, pd_data, ae_data
 
 def to_half_kana(text):
     table = {
@@ -1439,7 +1440,7 @@ st.caption("登録済みレジメンから Excel・パワポを 生成")
 st.divider()
 
 with st.spinner("スプレッドシートからデータを読み込み中..."):
-    basic_data, drug_data, master_data, notes_data, pd_data = load_all_data()
+    basic_data, drug_data, master_data, notes_data, pd_data, ae_data = load_all_data()
 
 if not basic_data:
     st.error("データの読み込みに失敗しました。スプレッドシートの公開設定を確認してください。")
@@ -1500,6 +1501,83 @@ if selected_basic:
         if st.button("🔄 データを最新化する", help="Pd設定後はこちらを押してください"):
             st.cache_data.clear()
             st.rerun()
+
+    # ===== 抗がん剤副作用マスタ登録状況チェック =====
+    # このレジメンの薬剤を取得
+    regimen_drugs = [
+        d for d in drug_data
+        if str(d.get('プロトコールNo', '')).strip() == protocol_no
+    ]
+    # 抗がん剤のみ対象（管理コードがACで始まるもの）
+    cancer_drug_codes = list(dict.fromkeys([
+        str(d.get('管理コード', '')).strip()
+        for d in regimen_drugs
+        if str(d.get('管理コード', '')).strip().startswith('AC')
+    ]))
+
+    if cancer_drug_codes:
+        # 副作用マスタを辞書化
+        ae_dict = {
+            str(r.get('管理コード', '')).strip(): r
+            for r in ae_data
+        }
+        # 登録済み・未登録に分類
+        registered   = []
+        unregistered = []
+        for code in cancer_drug_codes:
+            ae_row   = ae_dict.get(code, {})
+            reg_date = str(ae_row.get('登録日', '')).strip()
+            name     = str(ae_row.get('一般名（全角）', code)).strip()
+            # 薬品マスタから名前を補完
+            if name == code:
+                name = next(
+                    (m.get('一般名（全角）', code)
+                     for m in master_data
+                     if str(m.get('管理コード', '')).strip() == code),
+                    code
+                )
+            if reg_date:
+                registered.append({'code': code, 'name': name, 'date': reg_date})
+            else:
+                unregistered.append({'code': code, 'name': name})
+
+        st.divider()
+        st.subheader("📊 抗がん剤副作用マスタ 登録状況")
+
+        if unregistered:
+            st.warning(f"⚠️ 副作用が未登録の薬剤が {len(unregistered)} 件あります")
+
+        col_reg, col_unreg = st.columns(2)
+
+        with col_reg:
+            if registered:
+                st.markdown("**✅ 登録済み**")
+                for r in registered:
+                    st.caption(f"　{r['name']}：{r['date']} 登録")
+
+        with col_unreg:
+            if unregistered:
+                st.markdown("**❌ 未登録**")
+                for r in unregistered:
+                    st.caption(f"　{r['name']}")
+
+        if unregistered:
+            st.divider()
+            st.info("未登録の薬剤があります。副作用マスタを登録してからPdカテゴリを更新することをお勧めします。")
+            col_go, col_skip = st.columns(2)
+            with col_go:
+                if st.button(
+                    "📝 Pd説明文管理ページで副作用を登録する",
+                    use_container_width=True
+                ):
+                    st.switch_page("pages/4_Pd説明文管理.py")
+            with col_skip:
+                if st.button(
+                    "⏭️ このままファイル生成へ進む",
+                    use_container_width=True,
+                ):
+                    st.session_state["ae_skip"] = True
+                    st.rerun()
 
 st.divider()
 st.subheader("📁 ファイル生成")
