@@ -239,11 +239,12 @@ def show_pd_confirm_ui(protocol_no, drug_data, ae_data, pd_data, master_data, ba
         else:
             trigger_to_pdid[trigger] = cat_id
 
-    # ---------- 副作用マスタはキャッシュを使用（API接続なし）----------
-    ae_dict = {str(r.get("管理コード", "")).strip(): r for r in ae_data}
-    ae_columns = [k for k in ae_data[0].keys()
+    # ---------- 副作用マスタを毎回最新取得（キャッシュ1分）----------
+    ae_data_fresh = fetch_sheet_realtime("抗がん剤副作用マスタ")
+    ae_dict    = {str(r.get("管理コード", "")).strip(): r for r in ae_data_fresh}
+    ae_columns = [k for k in ae_data_fresh[0].keys()
                   if k not in ("管理コード", "一般名（全角）", "登録日")
-                  ] if ae_data else []
+                  ] if ae_data_fresh else []
 
 
     # ---------- レジメンの薬剤を取得 ----------
@@ -316,9 +317,11 @@ def show_pd_confirm_ui(protocol_no, drug_data, ae_data, pd_data, master_data, ba
         cb_key = f"pd_confirm_{protocol_no}_{pd_id}"
 
         # デフォルトは基本情報L列のPdカテゴリを参照
+        # 基本情報も最新を取得
         if cb_key not in st.session_state:
+            basic_fresh = fetch_sheet_realtime("基本情報")
             current_pd_cats = str(
-                next((b.get('Pdカテゴリ','') for b in basic_data
+                next((b.get('Pdカテゴリ','') for b in basic_fresh
                       if b['プロトコールNo'] == protocol_no), '')
             ).strip()
             current_pd_list = [x.strip() for x in current_pd_cats.split('|') if x.strip()]
@@ -689,7 +692,10 @@ def show_ae_register_ui(unregistered, ae_data, master_data, drug_data, basic_dat
                     st.session_state["ae_reg_done"].append(code)
                     st.session_state["ae_reg_index"] += 1
                     st.session_state.pop("ae_reg_ws", None)
-                    # 副作用マスタキャッシュをクリアして最新データを反映
+                    # pd_confirm_のセッションをクリアしてチェックボックスをリセット
+                    for _k in list(st.session_state.keys()):
+                        if _k.startswith("pd_confirm_"):
+                            del st.session_state[_k]
                     fetch_sheet_realtime.clear()
                     st.rerun()
                 else:
