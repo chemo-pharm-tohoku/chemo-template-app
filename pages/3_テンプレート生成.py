@@ -45,6 +45,19 @@ def get_gspread_client():
 
 @st.cache_data(ttl=300)
 def fetch_sheet(sheet_name):
+    """通常シート用（5分キャッシュ）"""
+    try:
+        gc = get_gspread_client()
+        ss = gc.open_by_url(SPREADSHEET_URL)
+        ws = ss.worksheet(sheet_name)
+        return ws.get_all_records()
+    except Exception as e:
+        st.error(f"シート「{sheet_name}」の取得に失敗: {e}")
+        return []
+
+@st.cache_data(ttl=60)
+def fetch_sheet_realtime(sheet_name):
+    """頻繁に更新されるシート用（1分キャッシュ）"""
     try:
         gc = get_gspread_client()
         ss = gc.open_by_url(SPREADSHEET_URL)
@@ -56,13 +69,12 @@ def fetch_sheet(sheet_name):
 
 @st.cache_data(ttl=300)
 def load_all_data():
-    basic_data  = fetch_sheet("基本情報")
-    drug_data   = fetch_sheet("薬剤情報")
-    master_data = fetch_sheet("薬品マスタ")
-    notes_data  = fetch_sheet("注意事項")
-    pd_data     = fetch_sheet("Pd")
-    # ===== 追加：抗がん剤副作用マスタを読み込む =====
-    ae_data     = fetch_sheet("抗がん剤副作用マスタ")
+    basic_data  = fetch_sheet_realtime("基本情報")           # 1分
+    drug_data   = fetch_sheet("薬剤情報")                    # 5分
+    master_data = fetch_sheet("薬品マスタ")                  # 5分
+    notes_data  = fetch_sheet("注意事項")                    # 5分
+    pd_data     = fetch_sheet("Pd")                          # 5分
+    ae_data     = fetch_sheet_realtime("抗がん剤副作用マスタ")  # 1分
     return basic_data, drug_data, master_data, notes_data, pd_data, ae_data
 
 def to_half_kana(text):
