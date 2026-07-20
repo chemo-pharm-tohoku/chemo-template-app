@@ -234,10 +234,6 @@ def show_pd_confirm_ui(protocol_no, drug_data, ae_data, pd_data, master_data, ba
                   ] if ae_data else []
 
 
-    # ae_dict は上で定義済み
-    ae_headers = ws_ae_rt.row_values(1)
-    ae_columns = ae_headers[2:-1]
-
     # ---------- レジメンの薬剤を取得 ----------
     regimen_drugs = [
         d for d in drug_data
@@ -1980,21 +1976,7 @@ if selected_basic:
 
     pd_cats = str(selected_basic.get('Pdカテゴリ', '')).strip()
     if not pd_cats:
-        st.warning("⚠️ このレジメンのPdカテゴリが未設定です。")
-        col_pd1, col_pd2 = st.columns(2)
-        with col_pd1:
-            if st.button(
-                "📝 Pd説明文管理ページで設定する",
-                use_container_width=True
-            ):
-                st.switch_page("pages/4_Pd説明文管理.py")
-        with col_pd2:
-            if st.button(
-                "⏭️ スキップしてファイル生成へ",
-                use_container_width=True
-            ):
-                st.session_state["pd_skip"] = True
-                st.rerun()
+        st.warning("⚠️ このレジメンのPdカテゴリが未設定です。下の副作用登録から設定してください。")
     else:
         st.success(f"✅ Pdカテゴリ設定済み：{pd_cats}")
 
@@ -2066,19 +2048,12 @@ if selected_basic:
 
         if unregistered:
             st.divider()
-            # 未登録薬剤をその場で登録するか確認
-            if not st.session_state.get("ae_skip", False):
-                if st.button(
-                    "📝 このページで副作用を登録する",
-                    type="primary",
-                    use_container_width=True
-                ):
-                    st.session_state["ae_reg_index"]        = 0
-                    st.session_state["ae_reg_start"]        = True
-                    st.session_state["ae_unregistered"]     = unregistered
-                    st.session_state["current_protocol_no"] = protocol_no
-                    st.rerun()
-                st.caption("⏭️ 登録をスキップしてもファイル生成は可能です。")
+            # 未登録薬剤は最初から登録UI表示
+            if not st.session_state.get("ae_reg_start", False):
+                st.session_state["ae_reg_index"]        = 0
+                st.session_state["ae_reg_start"]        = True
+                st.session_state["ae_unregistered"]     = unregistered
+                st.session_state["current_protocol_no"] = protocol_no
 
         # 副作用登録UI表示
         if st.session_state.get("ae_reg_start", False):
