@@ -378,13 +378,23 @@ def show_ae_register_ui(unregistered, ae_data, master_data, drug_data, basic_dat
 
     # ---------- チェックボックス ----------
     st.markdown("**副作用をチェックしてください**")
+
+    # スプレッドシートの現在値を取得してデフォルト表示
+    ae_dict_current = {str(r.get("管理コード","")).strip(): r for r in ae_data}
+    current_ae_row  = ae_dict_current.get(code, {})
+
     cols = st.columns(3)
     checked = {}
     for i, col_name in enumerate(ae_columns):
         cb_key = f"cb_{code}_{col_name}"
         ae_key = f"ae_{code}_{col_name}"
+        # CSV反映時のキー移行
         if ae_key in st.session_state and cb_key not in st.session_state:
             st.session_state[cb_key] = st.session_state.pop(ae_key)
+        # セッションになければスプレッドシートの現在値をデフォルトに
+        if cb_key not in st.session_state:
+            current_val = str(current_ae_row.get(col_name, "")).strip()
+            st.session_state[cb_key] = (current_val == "○")
         default = st.session_state.get(cb_key, False)
         with cols[i % 3]:
             checked[col_name] = st.checkbox(
@@ -392,6 +402,13 @@ def show_ae_register_ui(unregistered, ae_data, master_data, drug_data, basic_dat
                 value=default,
                 key=cb_key
             )
+
+    # チェックリセットボタン
+    if st.button("チェックをリセット", key=f"btn_reset_{code}"):
+        for col_name in ae_columns:
+            st.session_state.pop(f"cb_{code}_{col_name}", None)
+        st.session_state.pop(f"csv_applied_{code}", None)
+        st.rerun()
 
     # ---------- 登録・スキップ・リロードボタン ----------
     st.divider()
