@@ -325,10 +325,10 @@ def show_ae_register_ui(unregistered, ae_data, master_data, drug_data, basic_dat
         )
         st.info(
             f"📄 **副作用抽出定義書** → "
-            f"[こちらからダウンロード]({DEFINITION_URL})\n\n"
+            f"[こちらからTXTファイルをダウンロード]({DEFINITION_URL})\n\n"
             f"📄 **{brand_display} の添付文書PDF** → "
             f"[PMDAで検索](https://www.pmda.go.jp/PmdaSearch/iyakuSearch/) "
-            f"で「{brand_name}」を検索してダウンロード"
+            f"で「{brand_name}」を検索して添付文書PDFファイルをダウンロード"
         )
         st.divider()
         st.markdown("**② 以下の指示文をNotebookLMに貼り付けてください**")
@@ -342,7 +342,7 @@ def show_ae_register_ui(unregistered, ae_data, master_data, drug_data, basic_dat
         st.markdown("**③ 出力されたCSVをここに貼り付けてください**")
 
         csv_input = st.text_input(
-            "CSVを貼り付け（例：AC999,イピリムマブ,○,○,,,,,○）",
+            "CSVを貼り付けてEnterを押してください（例：AC999,イピリムマブ,○,○,,,,,○）",
             key=f"csv_input_{code}",
             placeholder=f"{code},{name},○,○,,,,,"
         )
@@ -403,8 +403,12 @@ def show_ae_register_ui(unregistered, ae_data, master_data, drug_data, basic_dat
     # チェックリセットボタン
     if st.button("チェックをリセット", key=f"btn_reset_{code}"):
         for col_name in ae_columns:
-            st.session_state.pop(f"cb_{code}_{col_name}", None)
-        st.session_state.pop(f"csv_applied_{code}", None)
+            key = f"cb_{code}_{col_name}"
+            if key in st.session_state:
+                del st.session_state[key]
+        csv_key = f"csv_input_{code}"
+        if csv_key in st.session_state:
+            del st.session_state[csv_key]
         st.rerun()
 
     # ---------- 登録・スキップ・リロードボタン ----------
@@ -443,8 +447,7 @@ def show_ae_register_ui(unregistered, ae_data, master_data, drug_data, basic_dat
                         range_name=f'{start_col}{row_idx}:{end_col}{row_idx}',
                         values=update_vals
                     )
-                    # デバッグ用（確認後削除可）
-                    st.write(f"更新値: {update_vals}")
+
                     st.success(f"✅ {name} の副作用を登録しました！")
                     st.session_state["ae_reg_done"].append(code)
                     st.session_state["ae_reg_index"] += 1
