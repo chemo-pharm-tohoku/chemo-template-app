@@ -364,31 +364,192 @@ shown = len(filtered)
 st.caption(f"全{total}件中　{shown}件表示")
 
 def show_item(item):
-    kind = get_kind(item)
+    kind   = get_kind(item)
+    cat_id = item.get('カテゴリID','')
     with st.expander(
         f"{KIND_COLOR.get(kind,'⚪')} "
-        f"**{item.get('カテゴリID','')}**　"
+        f"**{cat_id}**　"
         f"{item.get('カテゴリ名','')}"
     ):
-        col1, col2 = st.columns([1, 3])
-        with col1:
-            st.markdown(f"**種別：** {KIND_LABEL.get(kind,'')}")
-            st.markdown(f"**優先順位：** {item.get('優先順位','')}")
-            st.markdown("**トリガー：**")
-            triggers = str(item.get("トリガーキーワード", "")).split("|")
-            for t in triggers:
-                if t.strip():
-                    st.markdown(f"　・{t.strip()}")
-            if item.get("備考"):
-                st.markdown(f"**備考：** {item.get('備考','')}")
-        with col2:
-            st.markdown("**説明文：**")
-            st.info(item.get("説明文", "（説明文未登録）"))
-            if st.button(
-                "📋 コピー用テキスト表示",
-                key=f"copy_{item.get('カテゴリID','')}"
-            ):
-                st.code(item.get("説明文", ""), language=None)
+        # ---------- 編集モード ----------
+        edit_key = f"edit_mode_{cat_id}"
+        del_key  = f"del_confirm_{cat_id}"
+
+        if not st.session_state.get(edit_key, False):
+            # ---------- 通常表示 ----------
+            col1, col2 = st.columns([1, 3])
+            with col1:
+                st.markdown(f"**種別：** {KIND_LABEL.get(kind,'')}")
+                st.markdown(f"**優先順位：** {item.get('優先順位','')}")
+                st.markdown("**トリガー：**")
+                triggers = str(item.get("トリガーキーワード", "")).split("|")
+                for t in triggers:
+                    if t.strip():
+                        st.markdown(f"　・{t.strip()}")
+                if item.get("備考"):
+                    st.markdown(f"**備考：** {item.get('備考','')}")
+            with col2:
+                st.markdown("**説明文：**")
+                st.info(item.get("説明文", "（説明文未登録）"))
+                if st.button(
+                    "📋 コピー用テキスト表示",
+                    key=f"copy_{cat_id}"
+                ):
+                    st.code(item.get("説明文", ""), language=None)
+
+            # ---------- 編集・削除ボタン ----------
+            st.divider()
+            col_edit, col_del = st.columns(2)
+            with col_edit:
+                if st.button(
+                    "✏️ 編集する",
+                    key=f"btn_edit_{cat_id}",
+                    use_container_width=True
+                ):
+                    st.session_state[edit_key] = True
+                    st.rerun()
+            with col_del:
+                if st.button(
+                    "🗑️ 削除する",
+                    key=f"btn_del_{cat_id}",
+                    use_container_width=True
+                ):
+                    st.session_state[del_key] = True
+                    st.rerun()
+
+            # ---------- 削除確認ダイアログ ----------
+            if st.session_state.get(del_key, False):
+                st.warning(
+                    f"⚠️ 「{item.get('カテゴリ名','')}」を削除しますか？\n\n"
+                    "この操作は取り消せません。"
+                )
+                col_yes, col_no = st.columns(2)
+                with col_yes:
+                    if st.button(
+                        "✅ はい、削除する",
+                        key=f"btn_del_yes_{cat_id}",
+                        type="primary",
+                        use_container_width=True
+                    ):
+                        try:
+                            sh = get_spreadsheet()
+                            ws = sh.worksheet("Pd")
+                            all_vals = ws.get_all_values()
+                            for i, row in enumerate(all_vals, start=1):
+                                if row and row[0] == cat_id:
+                                    ws.delete_rows(i)
+                                    break
+                            st.success(f"✅ 「{item.get('カテゴリ名','')}」を削除しました")
+                            st.session_state.pop(del_key, None)
+                            load_pd_data.clear()
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"❌ 削除に失敗しました: {e}")
+                with col_no:
+                    if st.button(
+                        "❌ キャンセル",
+                        key=f"btn_del_no_{cat_id}",
+                        use_container_width=True
+                    ):
+                        st.session_state.pop(del_key, None)
+                        st.rerun()
+
+        else:
+            # ---------- 編集フォーム ----------
+            st.markdown("**✏️ 編集中**")
+            KIND_OPTIONS_EDIT = {
+                "A：標準説明文":   "A",
+                "B：副作用発現時": "B",
+                "C：薬剤固有注意": "C",
+            }
+            kind_labels  = list(KIND_OPTIONS_EDIT.keys())
+            current_kind = next(
+                (k for k, v in KIND_OPTIONS_EDIT.items() if v == kind),
+                kind_labels[0]
+            )
+            new_kind_label = st.selectbox(
+                "種別",
+                options=kind_labels,
+                index=kind_labels.index(current_kind),
+                key=f"edit_kind_{cat_id}"
+            )
+            new_kind = KIND_OPTIONS_EDIT[new_kind_label]
+            new_name = st.text_input(
+                "カテゴリ名",
+                value=item.get('カテゴリ名',''),
+                key=f"edit_name_{cat_id}"
+            )
+            new_trigger = st.text_input(
+                "トリガーキーワード",
+                value=item.get('トリガーキーワード',''),
+                key=f"edit_trigger_{cat_id}"
+            )
+            new_desc = st.text_area(
+                "説明文",
+                value=item.get('説明文',''),
+                height=150,
+                key=f"edit_desc_{cat_id}"
+            )
+            new_priority = st.number_input(
+                "優先順位",
+                min_value=1, max_value=999,
+                value=int(item.get('優先順位', 99))
+                      if str(item.get('優先順位','')).isdigit() else 99,
+                key=f"edit_priority_{cat_id}"
+            )
+            new_note = st.text_input(
+                "備考",
+                value=item.get('備考',''),
+                key=f"edit_note_{cat_id}"
+            )
+
+            col_save, col_cancel = st.columns(2)
+            with col_save:
+                if st.button(
+                    "✅ 保存する",
+                    key=f"btn_save_{cat_id}",
+                    type="primary",
+                    use_container_width=True
+                ):
+                    try:
+                        sh       = get_spreadsheet()
+                        ws       = sh.worksheet("Pd")
+                        all_vals = ws.get_all_values()
+                        headers  = all_vals[0]
+                        col_map  = {h: i+1 for i, h in enumerate(headers)}
+                        row_idx  = None
+                        for i, row in enumerate(all_vals[1:], start=2):
+                            if row and row[0] == cat_id:
+                                row_idx = i
+                                break
+                        if row_idx:
+                            updates = {
+                                'カテゴリ名'        : new_name,
+                                '種別'             : new_kind,
+                                'トリガーキーワード' : new_trigger,
+                                '説明文'            : new_desc,
+                                '優先順位'          : new_priority,
+                                '備考'              : new_note,
+                            }
+                            for col_name, val in updates.items():
+                                if col_name in col_map:
+                                    ws.update_cell(row_idx, col_map[col_name], val)
+                            st.success("✅ 保存しました！")
+                            st.session_state.pop(edit_key, None)
+                            load_pd_data.clear()
+                            st.rerun()
+                        else:
+                            st.error(f"❌ {cat_id} が見つかりません")
+                    except Exception as e:
+                        st.error(f"❌ 保存に失敗しました: {e}")
+            with col_cancel:
+                if st.button(
+                    "❌ キャンセル",
+                    key=f"btn_cancel_{cat_id}",
+                    use_container_width=True
+                ):
+                    st.session_state.pop(edit_key, None)
+                    st.rerun()
 
 def sort_items(items):
     return sorted(
