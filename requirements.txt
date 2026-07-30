@@ -6,3 +6,4 @@ python-pptx
 matplotlib
 japanize-matplotlib
 lxml
+google-genai
