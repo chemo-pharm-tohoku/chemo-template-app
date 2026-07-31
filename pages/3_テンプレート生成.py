@@ -2306,12 +2306,11 @@ def create_pptx(protocol_no, basic_data, drug_data,
                     color=COLOR_BLACK,align=PP_ALIGN.LEFT)
         ry += Cm(1.0)
         # 短縮注記を表示（対象薬剤が含まれる場合）
-        shorten_notes = list(dict.fromkeys([
-            str(d.get('短縮注記',''))
-            for d in drugs
-            if str(d.get('短縮注記','')).strip()
-            and str(d.get('短縮注記','')).strip() != ''
-        ]))
+        shorten_notes = []
+        for _d in drugs:
+            _sn = str(_d.get('短縮注記','')).strip()
+            if _sn and _sn not in shorten_notes:
+                shorten_notes.append(_sn)
         if shorten_notes:
             for sn in shorten_notes:
                 add_textbox(slide,right_x,ry,right_w,Cm(0.6),
@@ -2334,12 +2333,11 @@ def create_pptx(protocol_no, basic_data, drug_data,
                     font_size=Pt(14),bold=True,
                     color=COLOR_BLACK,align=PP_ALIGN.RIGHT)
         # 短縮注記を表示（対象薬剤が含まれる場合）
-        shorten_notes_b = list(dict.fromkeys([
-            str(d.get('短縮注記',''))
-            for d in drugs
-            if str(d.get('短縮注記','')).strip()
-            and str(d.get('短縮注記','')).strip() != ''
-        ]))
+        shorten_notes_b = []
+        for _d in drugs:
+            _sn = str(_d.get('短縮注記','')).strip()
+            if _sn and _sn not in shorten_notes_b:
+                shorten_notes_b.append(_sn)
         if shorten_notes_b:
             for sn in shorten_notes_b:
                 add_textbox(slide,x0,footer_y+Cm(0.8),cw,Cm(0.5),
