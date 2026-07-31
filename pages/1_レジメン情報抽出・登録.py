@@ -363,9 +363,11 @@ def create_pptx(protocol_no, basic_data, drug_data, master_data, notes_data):
             dose_base = str(d.get('用量根拠',''))
             kubun     = str(d.get('薬剤区分',''))
             try:
-                _raw = str(d.get('投与量数値', 0) or 0)
-                dose_num = float(re.sub(r'[^0-9.]', '', _raw) or 0)
-            except: dose_num = 0
+                _raw = str(d.get('投与量数値', 0) or 0).strip()
+                _raw = ''.join(c for c in _raw if c.isdigit() or c == '.')
+                dose_num = float(_raw or 0)
+            except:
+                dose_num = 0
             dose_str, unit_str = format_dose_text(d)
             if kubun == '抗がん剤':
                 if dose_base=='BSA依存':    dose_parts.append(f'({dose_num}mg/m²)')
