@@ -201,7 +201,8 @@ def get_regimen(protocol_no, basic_data, drug_data, master_data):
     return {'basic': basic, 'drugs': drugs, 'master_dict': master_dict}
 
 # ===== create_pptx =====
-def create_pptx(protocol_no, basic_data, drug_data, master_data, notes_data):
+def create_pptx(protocol_no, basic_data, drug_data,
+                master_data, notes_data):
     result = get_regimen(protocol_no, basic_data, drug_data, master_data)
     if result is None:
         return None
@@ -221,13 +222,13 @@ def create_pptx(protocol_no, basic_data, drug_data, master_data, notes_data):
     COLOR_BLACK   = RGBColor(0x00,0x00,0x00)
     TYPE_COLOR_MAP = {
         '免疫チェックポイント阻害薬': COLOR_ICI,
-        '分子標的薬'               : COLOR_MOL,
-        '吐き気止め'               : COLOR_NAUSEA,
-        '細胞障害性抗がん薬'       : COLOR_CYTO,
-        '補助薬'                   : COLOR_AUX,
-        '輸液'                     : COLOR_AUX,
-        'その他支持療法'           : COLOR_NAUSEA,
-        '造血因子'                 : COLOR_AUX,
+        '分子標的薬': COLOR_MOL,
+        '吐き気止め': COLOR_NAUSEA,
+        '細胞障害性抗がん薬': COLOR_CYTO,
+        '補助薬': COLOR_AUX,
+        '輸液': COLOR_AUX,
+        'その他支持療法': COLOR_NAUSEA,
+        '造血因子': COLOR_AUX,
     }
     A4_W = Cm(25.4); A4_H = Cm(19.05)
 
@@ -318,11 +319,14 @@ def create_pptx(protocol_no, basic_data, drug_data, master_data, notes_data):
     rp_groups = defaultdict(list)
     for drug in inj_schedule:
         rp_groups[str(drug.get('投与順序',''))].append(drug)
-    sorted_rps = sorted(rp_groups.keys(), key=lambda x: int(x) if x.isdigit() else 99)
+    sorted_rps = sorted(rp_groups.keys(),
+                        key=lambda x: int(x) if x.isdigit() else 99)
 
     all_invest_days = set()
     for rp in sorted_rps:
-        all_invest_days.update(parse_days_num(rp_groups[rp][0].get('投与Day数値','')))
+        all_invest_days.update(
+            parse_days_num(rp_groups[rp][0].get('投与Day数値',''))
+        )
     invest_days = sorted(all_invest_days)
     columns = []; prev = 0
     for d in invest_days:
@@ -335,7 +339,8 @@ def create_pptx(protocol_no, basic_data, drug_data, master_data, notes_data):
         prev = d
     if prev < cycle:
         rs=prev+1; re=cycle
-        columns.append({'type':'休薬','label':f'〜{re}日目','days':list(range(rs,re+1))})
+        columns.append({'type':'休薬','label':f'〜{re}日目',
+                        'days':list(range(rs,re+1))})
 
     need_bw  = any(str(d.get('用量根拠','')) in ('BW依存','AUC依存')
                    for d in drugs if str(d.get('①O欄_抗がん剤',''))=='○')
@@ -348,10 +353,14 @@ def create_pptx(protocol_no, basic_data, drug_data, master_data, notes_data):
         if rp != '内服':
             rp_all_groups[rp].append(drug)
 
-    total_min = int(sum(
-        max((safe_float(d.get('投与時間数値',0)) for d in rp_drugs), default=0)
+    total_min_raw = sum(
+        max((safe_float(d.get('投与時間数値', 0))
+             for d in rp_drugs), default=0)
         for rp_drugs in rp_all_groups.values()
-    ) * 60)
+    ) * 60
+    # 5分単位で切り上げ
+    import math
+    total_min = int(math.ceil(total_min_raw / 5) * 5)
 
     def get_rp_info(rp_drugs):
         rp_sorted = sorted(rp_drugs,
@@ -363,17 +372,17 @@ def create_pptx(protocol_no, basic_data, drug_data, master_data, notes_data):
             dose_base = str(d.get('用量根拠',''))
             kubun     = str(d.get('薬剤区分',''))
             try:
-                _raw = str(d.get('投与量数値', 0) or 0).strip()
-                _raw = ''.join(c for c in _raw if c.isdigit() or c == '.')
-                dose_num = float(_raw or 0)
+                _rv3 = str(d.get('投与量数値', 0) or 0).strip()
+                _rv3 = ''.join(c for c in _rv3 if c.isdigit() or c == '.')
+                dose_num = float(_rv3 or 0)
             except:
                 dose_num = 0
             dose_str, unit_str = format_dose_text(d)
             if kubun == '抗がん剤':
-                if dose_base=='BSA依存':    dose_parts.append(f'({dose_num}mg/m²)')
-                elif dose_base=='AUC依存':  dose_parts.append(f'(AUC：{int(dose_num)})')
-                elif dose_base=='BW依存':   dose_parts.append(f'({dose_num}mg/kg)')
-                elif dose_base=='固定用量': dose_parts.append(f'({dose_str}{unit_str})')
+                if dose_base=='BSA依存':   dose_parts.append(f'({dose_num}mg/m²)')
+                elif dose_base=='AUC依存': dose_parts.append(f'(AUC：{int(dose_num)})')
+                elif dose_base=='BW依存':  dose_parts.append(f'({dose_num}mg/kg)')
+                elif dose_base=='固定用量':dose_parts.append(f'({dose_str}{unit_str})')
         time_val  = rp_sorted[0].get('投与時間文字','')
         time_text = f'(投与時間：{time_val})' if time_val else ''
         type_str  = ''
@@ -392,11 +401,11 @@ def create_pptx(protocol_no, basic_data, drug_data, master_data, notes_data):
     title_h=Cm(1.5); course_h=Cm(1.0)
 
     add_textbox(slide,x0,y0,title_w,title_h,
-                text=basic['レジメン名'],font_size=Pt(24),bold=True,
-                color=COLOR_BLACK,align=PP_ALIGN.CENTER)
+                text=basic['レジメン名'],
+                font_size=Pt(24),bold=True,color=COLOR_BLACK,align=PP_ALIGN.CENTER)
     add_textbox(slide,x0,y0+title_h,title_w,course_h,
-                text=f'（1コース{cycle}日）',font_size=Pt(20),bold=True,
-                color=COLOR_BLACK,align=PP_ALIGN.CENTER)
+                text=f'（1コース{cycle}日）',
+                font_size=Pt(20),bold=True,color=COLOR_BLACK,align=PP_ALIGN.CENTER)
     add_textbox(slide,x0+title_w,y0,date_w,title_h+course_h,
                 text='当レジメンの開始日\n年　　月　　日',
                 font_size=Pt(11),bold=False,color=COLOR_BLACK,align=PP_ALIGN.LEFT)
@@ -407,8 +416,9 @@ def create_pptx(protocol_no, basic_data, drug_data, master_data, notes_data):
         '・強い副作用が出た場合や患者様の状態によっては、治療を延期したり、減量することがあります。'
     ])
     note_h = Cm(0.55*len(note_lines))
-    add_textbox_multi(slide,x0,y_cur,cw,note_h,lines=note_lines,
-                      font_size=Pt(11),color=COLOR_BLACK,align=PP_ALIGN.LEFT)
+    add_textbox_multi(slide,x0,y_cur,cw,note_h,
+                      lines=note_lines,font_size=Pt(11),
+                      color=COLOR_BLACK,align=PP_ALIGN.LEFT)
     y_cur += note_h+Cm(0.2)
 
     has_right   = bool(oral_schedule) or need_bw or need_bsa
@@ -420,10 +430,10 @@ def create_pptx(protocol_no, basic_data, drug_data, master_data, notes_data):
     col_w_cm = [inv_w_cm if c['type']=='投与'
                 else inv_w_cm*0.8 if c['type']=='休薬中'
                 else rest_w_cm for c in columns]
-    tbl_total_w = type_w_cm+name_w_cm+sum(col_w_cm)
-    scale       = float((cw*tbl_w_ratio)/Cm(tbl_total_w))
-    type_w_cm  *= scale; name_w_cm *= scale
-    col_w_cm    = [w*scale for w in col_w_cm]
+    tbl_total_w  = type_w_cm+name_w_cm+sum(col_w_cm)
+    scale        = float((cw*tbl_w_ratio)/Cm(tbl_total_w))
+    type_w_cm   *= scale; name_w_cm *= scale
+    col_w_cm     = [w*scale for w in col_w_cm]
 
     n_cols=2+len(columns); n_rps=len(sorted_rps); n_rows=1+n_rps
 
@@ -436,7 +446,8 @@ def create_pptx(protocol_no, basic_data, drug_data, master_data, notes_data):
         row_heights.append(max(Cm(0.75),Cm(0.42*calc_lines(nd,dp,tt)+0.2)))
     tbl_h = sum(row_heights)
 
-    shape = slide.shapes.add_table(n_rows,n_cols,x0,y_cur,Cm(tbl_total_w*scale),tbl_h)
+    shape = slide.shapes.add_table(n_rows,n_cols,x0,y_cur,
+                                   Cm(tbl_total_w*scale),tbl_h)
     table = shape.table
     table.columns[0].width = Cm(type_w_cm)
     table.columns[1].width = Cm(name_w_cm)
@@ -511,8 +522,9 @@ def create_pptx(protocol_no, basic_data, drug_data, master_data, notes_data):
                 oral_lines.append(line)
             oral_box_h = Cm(0.55*sum(l.count('\n')+1 for l in oral_lines)+0.3)
             add_textbox_multi(slide,right_x+Cm(0.15),ry+Cm(0.1),
-                              right_w-Cm(0.3),oral_box_h,lines=oral_lines,
-                              font_size=Pt(11),color=COLOR_BLACK,align=PP_ALIGN.LEFT)
+                              right_w-Cm(0.3),oral_box_h,
+                              lines=oral_lines,font_size=Pt(11),
+                              color=COLOR_BLACK,align=PP_ALIGN.LEFT)
             ry += oral_box_h+Cm(0.3)
         if need_bw:
             add_textbox(slide,right_x,ry,right_w,Cm(0.7),
@@ -526,11 +538,27 @@ def create_pptx(protocol_no, basic_data, drug_data, master_data, notes_data):
             ry += Cm(1.3)
         add_textbox(slide,right_x,ry,right_w,Cm(0.8),
                     text=f'所要時間の目安：{total_min}分',
-                    font_size=Pt(14),bold=True,color=COLOR_BLACK,align=PP_ALIGN.LEFT)
+                    font_size=Pt(14),bold=True,
+                    color=COLOR_BLACK,align=PP_ALIGN.LEFT)
         ry += Cm(1.0)
+        # 短縮注記を表示（対象薬剤が含まれる場合）
+        shorten_notes = []
+        for _d in drugs:
+            _sn = str(_d.get('短縮注記','')).strip()
+            if _sn and _sn not in shorten_notes:
+                shorten_notes.append(_sn)
+        if shorten_notes:
+            for sn in shorten_notes:
+                add_textbox(slide,right_x,ry,right_w,Cm(0.6),
+                            text=sn,
+                            font_size=Pt(9),bold=False,
+                            color=RGBColor(0x85,0x64,0x04),
+                            align=PP_ALIGN.LEFT)
+                ry += Cm(0.65)
         add_textbox(slide,right_x,ry,right_w,Cm(0.6),
                     text='東北大学病院　薬剤部',
-                    font_size=Pt(12),bold=True,color=COLOR_BLACK,align=PP_ALIGN.RIGHT)
+                    font_size=Pt(12),bold=True,
+                    color=COLOR_BLACK,align=PP_ALIGN.RIGHT)
     else:
         footer_y = A4_H-Cm(1.5)-mg
         add_textbox(slide,x0,footer_y,cw*0.5,Cm(0.7),
@@ -538,17 +566,33 @@ def create_pptx(protocol_no, basic_data, drug_data, master_data, notes_data):
                     color=COLOR_BLACK,align=PP_ALIGN.LEFT)
         add_textbox(slide,x0+cw*0.5,footer_y,cw*0.5,Cm(0.7),
                     text=f'所要時間の目安：{total_min}分',
-                    font_size=Pt(14),bold=True,color=COLOR_BLACK,align=PP_ALIGN.RIGHT)
+                    font_size=Pt(14),bold=True,
+                    color=COLOR_BLACK,align=PP_ALIGN.RIGHT)
+        # 短縮注記を表示（対象薬剤が含まれる場合）
+        shorten_notes_b = []
+        for _d in drugs:
+            _sn = str(_d.get('短縮注記','')).strip()
+            if _sn and _sn not in shorten_notes_b:
+                shorten_notes_b.append(_sn)
+        if shorten_notes_b:
+            for sn in shorten_notes_b:
+                add_textbox(slide,x0,footer_y+Cm(0.8),cw,Cm(0.5),
+                            text=sn,
+                            font_size=Pt(9),bold=False,
+                            color=RGBColor(0x85,0x64,0x04),
+                            align=PP_ALIGN.LEFT)
+                footer_y += Cm(0.55)
         add_textbox(slide,x0,footer_y+Cm(0.8),cw,Cm(0.6),
                     text='東北大学病院　薬剤部',
-                    font_size=Pt(12),bold=True,color=COLOR_BLACK,align=PP_ALIGN.RIGHT)
+                    font_size=Pt(12),bold=True,
+                    color=COLOR_BLACK,align=PP_ALIGN.RIGHT)
 
     output = io.BytesIO()
     prs.save(output)
     output.seek(0)
     return output.getvalue()
 
-# ===== STEP1: PDFアップロード =====
+
 st.subheader("STEP 1　レジメンPDFをアップロード")
 uploaded = st.file_uploader(
     "PDFファイルをここにドロップ",
