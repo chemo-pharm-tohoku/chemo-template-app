@@ -1515,7 +1515,10 @@ def create_excel(protocol_no, basic_data, drug_data,
         code      = str(drug['管理コード'])
         master    = master_dict.get(code, {})
         dose_base = str(drug['用量根拠'])
-        dose_num  = float(drug['投与量数値']) if str(drug['投与量数値']) != '' else 0
+        try:
+            dose_num = float(drug['投与量数値']) if str(drug['投与量数値']).strip() != '' else 0
+        except (ValueError, TypeError):
+            dose_num = 0
         name      = str(drug.get('商品名','') or master.get('採用商品名（全角）', code))
         dose_str, unit_str = format_dose_text(drug)
         ws1.cell(row=row, column=1).value  = name
@@ -1609,7 +1612,10 @@ def create_excel(protocol_no, basic_data, drug_data,
         code      = str(drug['管理コード'])
         master    = master_dict.get(code, {})
         dose_base = str(drug['用量根拠'])
-        dose_num  = float(drug['投与量数値']) if str(drug['投与量数値']) != '' else 0
+        try:
+            dose_num = float(drug['投与量数値']) if str(drug['投与量数値']).strip() != '' else 0
+        except (ValueError, TypeError):
+            dose_num = 0
         day_str   = str(drug['投与Day文字'])
         name_half = to_half_kana(str(master.get('一般名（全角）','')))
         d_row     = dose_rows.get(code)
