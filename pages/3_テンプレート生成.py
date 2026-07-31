@@ -790,6 +790,244 @@ def show_ae_register_ui(unregistered, ae_data, master_data, drug_data, basic_dat
         ):
             st.rerun()
 
+
+
+def build_o_pd_sheet(wb, protocol_no, basic_data, drug_data,
+                     master_data, ae_data, pd_data):
+    from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
+
+    FONT_BASE    = "BIZ UDゴシック"
+    FILL_HEADER  = PatternFill("solid", fgColor="2E4057")
+    FILL_SECTION = PatternFill("solid", fgColor="E3F2FD")
+    FILL_IRAE    = PatternFill("solid", fgColor="E8F5E9")
+    FILL_PD      = PatternFill("solid", fgColor="FFF9C4")
+    FILL_ALWAYS  = PatternFill("solid", fgColor="FFFFFF")
+    FILL_COND    = PatternFill("solid", fgColor="F3F3F3")
+    FILL_NOTE    = PatternFill("solid", fgColor="FFF3CD")
+
+    thin          = Side(style="thin",   color="CCCCCC")
+    medium        = Side(style="medium", color="888888")
+    BORDER        = Border(left=thin,   right=thin,   top=thin,   bottom=thin)
+    BORDER_MEDIUM = Border(left=medium, right=medium, top=medium, bottom=medium)
+
+    def font(size=10, bold=False, color="000000"):
+        return Font(name=FONT_BASE, size=size, bold=bold, color=color)
+
+    def cell_write(ws, row, col, value, fill=None, fnt=None,
+                   align_h="left", align_v="center", wrap=False, border=None):
+        c = ws.cell(row=row, column=col)
+        c.value = value
+        if fill:   c.fill   = fill
+        if fnt:    c.font   = fnt
+        if border: c.border = border
+        c.alignment = Alignment(horizontal=align_h, vertical=align_v, wrap_text=wrap)
+        return c
+
+    # データ準備
+    basic_row    = next((b for b in basic_data if b["プロトコールNo"] == protocol_no), {})
+    cancer_codes = list(dict.fromkeys([
+        str(d.get("管理コード","")).strip()
+        for d in drug_data
+        if str(d.get("プロトコールNo","")).strip() == protocol_no
+        and str(d.get("管理コード","")).strip().startswith("AC")
+    ]))
+
+    ae_dict  = {str(r.get("管理コード","")).strip(): r for r in (ae_data or [])}
+    ae_flags = {}
+    for code in cancer_codes:
+        ae_row = ae_dict.get(code, {})
+        for col_name, val in ae_row.items():
+            if str(val).strip() == "○":
+                ae_flags[col_name] = True
+
+    has_irae = ae_flags.get("irAE", False)
+
+    pda_list = sorted(
+        [p for p in (pd_data or [])
+         if str(p.get("種別","")).strip() == "A"
+         and str(p.get("トリガーキーワード","")).strip() != "手動設定"],
+        key=lambda x: int(x["優先順位"]) if str(x.get("優先順位","")).isdigit() else 99
+    )
+    pd_cat_raw  = str(basic_row.get("Pdカテゴリ","")).strip()
+    pd_cat_list = [x.strip() for x in pd_cat_raw.split("|") if x.strip()]
+    matched_pda = [p for p in pda_list if p["カテゴリID"] in pd_cat_list]
+
+    # シート生成
+    ws = wb.create_sheet("O欄+Pd欄")
+    if "O欄" in wb.sheetnames:
+        o_idx = wb.sheetnames.index("O欄")
+        wb.move_sheet("O欄+Pd欄", offset=-(len(wb.sheetnames)-1-o_idx))
+    ws.column_dimensions["A"].width = 80
+    row = 1
+
+    # ブロック1: O欄
+    cell_write(ws, row, 1, "▼ O欄＋Pd欄　コピーしてカルテに貼り付けてください",
+               fill=FILL_HEADER, fnt=font(11, True, "FFFFFF"))
+    ws.row_dimensions[row].height = 22
+    row += 1
+    cell_write(ws, row, 1, "=O欄!A2", fnt=font(10), wrap=True)
+    ws.row_dimensions[row].height = 200
+    row += 2
+
+    # ブロック2: HBV
+    cell_write(ws, row, 1, "●B型肝炎スクリーニング",
+               fnt=font(10, True), fill=FILL_SECTION)
+    ws.row_dimensions[row].height = 18
+    row += 1
+    cell_write(ws, row, 1,
+               "　HBs-AG：□－　□＋　、HBs-AB：□－　□＋　、HBc-AB：□－　□＋",
+               fnt=font(10))
+    ws.row_dimensions[row].height = 16
+    row += 1
+    cell_write(ws, row, 1,
+               "　※＋がある場合→HBV-DNA　□検出限界以下（　　　　）",
+               fnt=font(10, color="856404"), fill=FILL_NOTE)
+    ws.row_dimensions[row].height = 16
+    row += 2
+
+    # ブロック3: 副作用評価
+    cell_write(ws, row, 1, "◇副作用",
+               fnt=font(11, True), fill=FILL_SECTION, border=BORDER_MEDIUM)
+    ws.row_dimensions[row].height = 20
+    row += 1
+    cell_write(ws, row, 1,
+               "*評価方法　評価日がd1：前クール全体で最も悪い検査値や症状\n"
+               "　　　　　 上記以外　：d1～評価日の最も悪い検査値や症状",
+               fnt=font(9, color="555555"), fill=FILL_NOTE, wrap=True)
+    ws.row_dimensions[row].height = 30
+    row += 1
+
+    AE_ITEMS = [
+        ("●嘔吐　　　　　　□なし　□あり　(嘔吐回数;　　　)",              True,  None),
+        ("●悪心　　　　　　□なし　□G1　□G2　□G3",                        True,  None),
+        ("●食欲不振　　　　□なし　□G1　□G2　□G3　□G4",                  True,  None),
+        ("●便秘　　　　　　□なし　□あり　（ベースライン 回数：　　　、BS：　　　）", True, None),
+        ("●倦怠感　　　　　□なし　□G1　□G2　□G3",                        True,  None),
+        ("●骨髄抑制\n　　WBC　　□なし　□G1　□G2　□G3　□G4\n"
+         "　　Neut　　□なし　□G1　□G2　□G3　□G4\n"
+         "　　Hb　　　□なし　□G1　□G2　□G3　□G4\n"
+         "　　PLT　　　□なし　□G1　□G2　□G3　□G4",                      True,  None),
+        ("●肝機能障害　　　□なし　□あり",                                  True,  None),
+        ("●腎機能障害　　　□なし　□あり",                                  True,  None),
+        ("●電解質異常　　　□なし　□あり",                                  True,  None),
+        ("●下痢　　　　　　□なし　□あり　（ベースライン 回数：　　　、BS：　　　）", False, "下痢"),
+        ("●口腔粘膜炎　　　□なし　□G1　□G2　□G3　□G4",                  False, "口腔粘膜炎"),
+        ("●脱毛　　　　　　□なし　□G1　□G2",                              False, "脱毛"),
+        ("●末梢神経障害　　□なし　□G1　□G2　□G3　□G4",                  False, "末梢神経障害"),
+        ("●味覚異常　　　　□なし　□G1　□G2",                              False, "味覚異常"),
+        ("●IRR　　　　　　 □なし　□あり",                                  False, "IRR"),
+        ("●手足症候群　　　□なし　□G1　□G2　□G3",                        False, "手足症候群"),
+        ("●皮膚障害　　　　□なし　□あり",                                  False, "皮膚障害"),
+        ("●間質性肺炎　　　□なし　□あり",                                  False, "間質性肺炎"),
+        ("●心障害　　　　　□なし　□あり",                                  False, "心障害"),
+        ("●その他（　　　　　　　　　　　）",                               True,  None),
+    ]
+
+    for text, always, flag in AE_ITEMS:
+        if not always and not ae_flags.get(flag, False):
+            continue
+        actual_text = text.replace("\n", "\n")
+        line_count  = actual_text.count("\n") + 1
+        fill = FILL_ALWAYS if always else FILL_COND
+        cell_write(ws, row, 1, actual_text,
+                   fnt=font(10), fill=fill, wrap=True, border=BORDER)
+        ws.row_dimensions[row].height = max(16, line_count * 15 + 3)
+        row += 1
+    row += 1
+
+    # ブロック4: irAE
+    if has_irae:
+        cell_write(ws, row, 1,
+                   "◇irAE　※検査値はベースラインを記載、最新値は【薬学的管理】参照",
+                   fnt=font(11, True), fill=FILL_IRAE, border=BORDER_MEDIUM)
+        ws.row_dimensions[row].height = 20
+        row += 1
+        for text in [
+            "　●IRR　　　　　　　　　　　　□なし　□あり",
+            "　●IP様症状(空咳･呼吸困難感)　□なし　□あり；/ KL-6：",
+            "　●肝機能異常　　　　　　　　　□なし　□あり",
+            "　●腎機能異常　　　　　　　　　□なし　□あり",
+            "　●甲状腺機能異常　　　　　　　□なし　□あり；/ FT3：　FT4：　TSH：",
+            "　●下垂体機能異常　　　　　　　□なし　□あり；/ ACTH：",
+            "　●副腎機能障害　　　　　　　　□なし　□あり；/ コルチゾール：",
+            "　●高血糖　　　　　　　　　　　□なし　□あり；/ HbA1c：",
+            "　●静脈血栓症　　　　　　　　　□なし　□あり；/ D-dimer：",
+            "　●皮膚障害　　　　　　　　　　□なし　□あり",
+            "　●下痢・大腸炎　　　　　　　　□なし　□あり",
+            "　●眼症状(ぶどう膜炎)　　　　　□なし　□あり",
+            "　●筋炎･横紋筋融解症/重症筋無力症/心筋炎　□なし　□あり；/ CK：",
+            "　●神経障害(ギラン・バレー症候群）　　　　 □なし　□あり",
+            "　●脳炎/髄膜炎　　　　　　　　□なし　□あり",
+            "　●膵炎　　　　　　　　　　　　□なし　□あり；/ リパーゼ：　アミラーゼ：",
+            "　●その他（　　　　　　　　　　　）",
+        ]:
+            cell_write(ws, row, 1, text,
+                       fnt=font(10), fill=FILL_IRAE, border=BORDER)
+            ws.row_dimensions[row].height = 16
+            row += 1
+        row += 1
+
+    # ブロック5: Pd記載
+    cell_write(ws, row, 1, "Pd記載",
+               fnt=font(11, True), fill=FILL_PD, border=BORDER_MEDIUM)
+    ws.row_dimensions[row].height = 20
+    row += 1
+    cell_write(ws, row, 1,
+               "Pd；ご本人に対して初回面談実施。服薬状況、服薬理解度および"
+               "有害事象の発現状況の確認を行った。",
+               fnt=font(10), fill=FILL_PD, wrap=True)
+    ws.row_dimensions[row].height = 30
+    row += 1
+    cell_write(ws, row, 1,
+               "化学療法のしおり、メーカー作成パンフレット（パンフレット名記載）、"
+               "添付する説明書を用いて、化学療法について説明"
+               "（治療スケジュール、支持療法、副作用/対策）を行った。",
+               fnt=font(10), fill=FILL_PD, wrap=True)
+    ws.row_dimensions[row].height = 35
+    row += 1
+
+    has_cytotoxic = any(
+        str(m.get("薬剤区分","")).strip() == "抗がん剤"
+        and str(m.get("管理コード","")).strip() in cancer_codes
+        for m in master_data
+    )
+    ae_labels = []
+    if has_cytotoxic:
+        ae_labels += ["骨髄抑制", "口内炎", "脱毛", "悪心嘔吐等"]
+    if has_irae:
+        ae_labels += ["irAE"]
+    ae_label_str = "・".join(ae_labels) if ae_labels else "各種副作用"
+
+    cell_write(ws, row, 1,
+               "・代表的な有害事象（" + ae_label_str + "）について以下の通り説明をした。",
+               fnt=font(10), fill=FILL_PD, wrap=True)
+    ws.row_dimensions[row].height = 20
+    row += 1
+
+    for pda in matched_pda:
+        cat_name   = str(pda.get("カテゴリ名","")).strip()
+        text       = str(pda.get("説明文","")).strip()
+        if text:
+            text_clean = text.replace("\r\n", "\n").replace("\r", "\n")
+            lines_pd   = text_clean.split("\n")
+            full_text  = "　【" + cat_name + "】\n" + "\n".join(
+                "　　" + ln for ln in lines_pd if ln.strip()
+            )
+        else:
+            full_text = "　【" + cat_name + "】"
+        line_count = full_text.count("\n") + 1
+        cell_write(ws, row, 1, full_text,
+                   fnt=font(10), fill=FILL_PD, wrap=True)
+        ws.row_dimensions[row].height = max(16, line_count * 14 + 4)
+        row += 1
+
+    cell_write(ws, row, 1,
+               "※個別の薬剤に関する説明事項等も追記（必須）",
+               fnt=font(9, color="856404"), fill=FILL_NOTE, wrap=True)
+    ws.row_dimensions[row].height = 16
+    return ws
+
+
 # ===== 追加：Pdシート生成関数 =====
 def build_pd_sheet(wb, protocol_no, basic_data, pd_data, master_data):
     """
@@ -1058,7 +1296,7 @@ def build_pd_sheet(wb, protocol_no, basic_data, pd_data, master_data):
 
 def create_excel(protocol_no, basic_data, drug_data,
                  master_data, notes_data,
-                 pd_data=None):          # ===== 追加：pd_data引数 =====
+                 pd_data=None, ae_data=None):  # ae_data追加
 
     result = get_regimen(protocol_no, basic_data, drug_data, master_data)
     if result is None:
@@ -1367,6 +1605,12 @@ def create_excel(protocol_no, basic_data, drug_data,
     ws2['A2'].alignment = Alignment(wrap_text=True, vertical='top')
     ws2['A2'].border    = BORDER_MEDIUM
     ws2.row_dimensions[2].height = 200
+
+    # ===== O欄+Pd欄 合体シートを生成 =====
+    build_o_pd_sheet(
+        wb, protocol_no, basic_data, drug_data,
+        master_data, ae_data, pd_data
+    )
 
     # ===== 追加：Pd欄シートをO欄の次に生成 =====
     if pd_data:
@@ -2194,7 +2438,7 @@ with col_excel:
             excel_data = create_excel(
                 protocol_no, basic_data,
                 drug_data, master_data, notes_data,
-                pd_data=pd_data
+                pd_data=pd_data, ae_data=ae_data
             )
         if excel_data:
             st.download_button(
