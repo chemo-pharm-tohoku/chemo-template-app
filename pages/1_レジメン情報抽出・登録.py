@@ -365,7 +365,12 @@ def create_pptx(protocol_no, basic_data, drug_data,
     def get_rp_info(rp_drugs):
         rp_sorted = sorted(rp_drugs,
                            key=lambda d: INJECTION_ORDER.get(str(d.get('支持療法分類','')),99))
-        names = [str(d.get('商品名','') or d.get('採用商品名（全角）','')) for d in rp_sorted]
+        # 輸液系（IV系）を除外して薬品マスタの採用商品名を優先
+        names = [
+            str(d.get('採用商品名（全角）','') or d.get('商品名',''))
+            for d in rp_sorted
+            if not str(d.get('管理コード','')).strip().startswith('IV')
+        ]
         name_text = '\n'.join([n for n in names if n])
         dose_parts = []
         for d in rp_sorted:
@@ -379,9 +384,13 @@ def create_pptx(protocol_no, basic_data, drug_data,
                 dose_num = 0
             dose_str, unit_str = format_dose_text(d)
             if kubun == '抗がん剤':
-                if dose_base=='BSA依存':   dose_parts.append(f'({dose_num}mg/m²)')
+                if dose_base=='BSA依存':
+                    _dn = int(dose_num) if dose_num == int(dose_num) else dose_num
+                    dose_parts.append(f'({_dn}mg/m²)')
                 elif dose_base=='AUC依存': dose_parts.append(f'(AUC：{int(dose_num)})')
-                elif dose_base=='BW依存':  dose_parts.append(f'({dose_num}mg/kg)')
+                elif dose_base=='BW依存':
+                    _dn = int(dose_num) if dose_num == int(dose_num) else dose_num
+                    dose_parts.append(f'({_dn}mg/kg)')
                 elif dose_base=='固定用量':dose_parts.append(f'({dose_str}{unit_str})')
         time_val  = rp_sorted[0].get('投与時間文字','')
         time_text = f'(投与時間：{time_val})' if time_val else ''
