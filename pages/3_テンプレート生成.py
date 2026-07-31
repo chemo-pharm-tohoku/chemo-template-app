@@ -1001,7 +1001,7 @@ def build_o_pd_sheet(wb, protocol_no, basic_data, drug_data,
     ae_label_str = "・".join(ae_labels) if ae_labels else "各種副作用"
 
     cell_write(ws, row, 1,
-               "・代表的な有害事象（" + ae_label_str + "）について以下の通り説明をした。",
+               "・代表的な有害事象（" + ae_label_str + "）の対処法は以下の通り指導した。",
                fnt=font(10), fill=FILL_PD, wrap=True)
     ws.row_dimensions[row].height = 20
     row += 1
