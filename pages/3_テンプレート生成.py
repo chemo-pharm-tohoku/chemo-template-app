@@ -326,6 +326,30 @@ def show_pd_confirm_ui(protocol_no, drug_data, ae_data, pd_data, master_data, ba
             pd_evidence[pd_id]['has_maru'] = True
 
     # ---------- 優先順位でソート ----------
+    # 脱毛（PDA007）は手動設定でも副作用マスタに脱毛フラグがあれば△扱いで表示
+    _pda007 = next((p for p in pd_data if p['カテゴリID'] == 'PDA007'), None)
+    if _pda007 and 'PDA007' not in pd_evidence:
+        _datsumou_entries = []
+        for _code in cancer_codes:
+            _ae_row = ae_dict.get(_code, {})
+            _flag   = str(_ae_row.get('脱毛', '')).strip()
+            if _flag in ('○', '△'):
+                _dname = next(
+                    (m.get('一般名（全角）', _code)
+                     for m in master_data
+                     if str(m.get('管理コード', '')).strip() == _code),
+                    _code
+                )
+                _dreg = str(_ae_row.get('登録日', '')).strip()
+                _datsumou_entries.append(
+                    {'name': _dname, 'date': _dreg, 'flag': _flag}
+                )
+        if _datsumou_entries:
+            pd_evidence['PDA007'] = {
+                'entries' : _datsumou_entries,
+                'has_maru': False  # 常にチェックなし
+            }
+
     sorted_pd_ids = sorted(pd_evidence.keys(), key=lambda x: priority_dict.get(x, 99))
 
       # ---------- チェックボックスで表示 ----------
