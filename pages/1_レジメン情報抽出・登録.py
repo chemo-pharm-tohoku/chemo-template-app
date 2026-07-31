@@ -126,7 +126,11 @@ def parse_days_num(day_str):
 
 def format_dose_text(drug):
     try:
-        dose = float(drug.get('投与量数値', 0) or 0)
+        try:
+            _raw_dose = str(drug.get('投与量数値', 0) or 0)
+            dose = float(re.sub(r'[^0-9.]', '', _raw_dose) or 0)
+        except (ValueError, TypeError):
+            dose = 0
     except:
         dose = 0
     unit_input = str(drug.get('投与単位', '')).strip()
@@ -358,7 +362,9 @@ def create_pptx(protocol_no, basic_data, drug_data, master_data, notes_data):
         for d in rp_sorted:
             dose_base = str(d.get('用量根拠',''))
             kubun     = str(d.get('薬剤区分',''))
-            try:    dose_num = float(d.get('投与量数値',0) or 0)
+            try:
+                _raw = str(d.get('投与量数値', 0) or 0)
+                dose_num = float(re.sub(r'[^0-9.]', '', _raw) or 0)
             except: dose_num = 0
             dose_str, unit_str = format_dose_text(d)
             if kubun == '抗がん剤':
