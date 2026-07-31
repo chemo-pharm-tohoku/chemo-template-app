@@ -276,8 +276,11 @@ def show_pd_confirm_ui(protocol_no, drug_data, ae_data, pd_data, master_data, ba
         if str(d.get('管理コード', '')).strip().startswith('AC')
     ]))
 
-    # ---------- PdカテゴリIDと根拠薬剤のマッピング ----------
-    # {cat_id: [{name, reg_date}, ...]}
+   # ---------- PdカテゴリIDと根拠薬剤のマッピング ----------
+    # {cat_id: {
+    #     'entries': [{name, reg_date, flag}],
+    #     'has_maru': bool
+    # }}
     pd_evidence = {}
 
     for drug_code in cancer_codes:
@@ -290,59 +293,72 @@ def show_pd_confirm_ui(protocol_no, drug_data, ae_data, pd_data, master_data, ba
         )
         reg_date = str(ae_row.get('登録日', '')).strip()
 
-        # 副作用列から判定
+        # 副作用列から判定（○と△を区別）
         for col in ae_columns:
             val = str(ae_row.get(col, '')).strip()
-            if val == '○':  # ○のみPdカテゴリトリガー（△は除外）
+            if val in ('○', '△'):
                 pd_ids = trigger_to_pdid.get(col, [])
                 for pd_id in pd_ids:
                     if pd_id not in pd_evidence:
-                        pd_evidence[pd_id] = []
-                    # 重複しないように追加
-                    if not any(e['name'] == drug_name for e in pd_evidence[pd_id]):
-                        pd_evidence[pd_id].append({
+                        pd_evidence[pd_id] = {'entries': [], 'has_maru': False}
+                    if not any(e['name'] == drug_name
+                               for e in pd_evidence[pd_id]['entries']):
+                        pd_evidence[pd_id]['entries'].append({
                             'name': drug_name,
-                            'date': reg_date
+                            'date': reg_date,
+                            'flag': val,
                         })
+                    if val == '○':
+                        pd_evidence[pd_id]['has_maru'] = True
 
-        # 管理コードから判定（PDC系）
+        # 管理コードから判定（PDC系）→ ○扱い
         if drug_code in code_to_pdid:
             pd_id = code_to_pdid[drug_code]
             if pd_id not in pd_evidence:
-                pd_evidence[pd_id] = []
-            if not any(e['name'] == drug_name for e in pd_evidence[pd_id]):
-                pd_evidence[pd_id].append({
+                pd_evidence[pd_id] = {'entries': [], 'has_maru': True}
+            if not any(e['name'] == drug_name
+                       for e in pd_evidence[pd_id]['entries']):
+                pd_evidence[pd_id]['entries'].append({
                     'name': drug_name,
-                    'date': reg_date
+                    'date': reg_date,
+                    'flag': '○',
                 })
-
-    if not pd_evidence:
-        st.info("副作用マスタへの登録が完了すると、ここにPdカテゴリが表示されます。")
-        st.caption("上の副作用登録を完了するか、手動でPdカテゴリを設定してください。")
-        return
+            pd_evidence[pd_id]['has_maru'] = True
 
     # ---------- 優先順位でソート ----------
     sorted_pd_ids = sorted(pd_evidence.keys(), key=lambda x: priority_dict.get(x, 99))
 
-    # ---------- チェックボックスで表示 ----------
+      # ---------- チェックボックスで表示 ----------
+    PMDA_URL = "https://www.info.pmda.go.jp/psearch/html/menu_tenpu_base.html"
+
     st.markdown("**確定するPdカテゴリを選択してください：**")
+    st.caption(
+        "✅ チェックあり：副作用フラグ **○** の薬剤が含まれる（デフォルトON）　"
+        "⬜ チェックなし：副作用フラグ **△** のみの薬剤が含まれる（要確認）"
+    )
 
     selected_ids = []
     for pd_id in sorted_pd_ids:
         pd_name = next(
             (p['カテゴリ名'] for p in pd_data if p['カテゴリID'] == pd_id), pd_id
         )
-        prio = priority_dict.get(pd_id, 99)
-        cb_key = f"pd_confirm_{protocol_no}_{pd_id}"
+        cb_key   = f"pd_confirm_{protocol_no}_{pd_id}"
+        ev_info  = pd_evidence[pd_id]
+        has_maru = ev_info['has_maru']
+        entries  = ev_info['entries']
 
-        # デフォルトは基本情報L列のPdカテゴリを参照
+        # デフォルト値の決定
         if cb_key not in st.session_state:
             current_pd_cats = str(
                 next((b.get('Pdカテゴリ','') for b in basic_data
                       if b['プロトコールNo'] == protocol_no), '')
             ).strip()
             current_pd_list = [x.strip() for x in current_pd_cats.split('|') if x.strip()]
-            st.session_state[cb_key] = (pd_id in current_pd_list)
+            if current_pd_list:
+                st.session_state[cb_key] = (pd_id in current_pd_list)
+            else:
+                # 未登録なら○があればTrue、△のみならFalse
+                st.session_state[cb_key] = has_maru
 
         col_cb, col_info = st.columns([1, 4])
         with col_cb:
@@ -352,11 +368,22 @@ def show_pd_confirm_ui(protocol_no, drug_data, ae_data, pd_data, master_data, ba
                 key=cb_key
             )
         with col_info:
-            st.markdown(f"**{pd_name}**")
-            evidence_list = pd_evidence[pd_id]
-            for ev in evidence_list:
-                date_str = f"（{ev['date']} 登録）" if ev['date'] else "（登録日不明）"
-                st.caption(f"　　{ev['name']} {date_str}")
+            if has_maru:
+                st.markdown(f"**{pd_name}**　🟢 ○あり")
+            else:
+                st.markdown(f"**{pd_name}**　🔺 △のみ（要確認）")
+
+            for ev in entries:
+                date_str  = f"（{ev['date']} 登録）" if ev['date'] else "（登録日不明）"
+                flag_icon = "○" if ev['flag'] == '○' else "△"
+                st.caption(f"　　{flag_icon} {ev['name']} {date_str}")
+
+            # △のみの場合はPMDAリンクを表示
+            if not has_maru:
+                st.caption(
+                    f"　　📎 最新の添付文書を確認してください → "
+                    f"[PMDA 添付文書検索]({PMDA_URL})"
+                )
 
         if checked:
             selected_ids.append(pd_id)
