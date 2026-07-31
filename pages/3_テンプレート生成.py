@@ -2307,9 +2307,10 @@ def create_pptx(protocol_no, basic_data, drug_data,
         ry += Cm(1.0)
         # 短縮注記を表示（対象薬剤が含まれる場合）
         shorten_notes = list(dict.fromkeys([
-           str(d.get('短縮注記',''))
+            str(d.get('短縮注記',''))
             for d in drugs
             if str(d.get('短縮注記','')).strip()
+            and str(d.get('短縮注記','')).strip() != ''
         ]))
         if shorten_notes:
             for sn in shorten_notes:
@@ -2337,6 +2338,7 @@ def create_pptx(protocol_no, basic_data, drug_data,
             str(d.get('短縮注記',''))
             for d in drugs
             if str(d.get('短縮注記','')).strip()
+            and str(d.get('短縮注記','')).strip() != ''
         ]))
         if shorten_notes_b:
             for sn in shorten_notes_b:
