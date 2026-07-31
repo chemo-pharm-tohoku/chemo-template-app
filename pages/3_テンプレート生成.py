@@ -43,7 +43,7 @@ def get_gspread_client():
     )
     return gspread.authorize(creds)
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=1)
 def fetch_sheet(sheet_name):
     """通常シート用（5分キャッシュ）"""
     try:
@@ -55,7 +55,7 @@ def fetch_sheet(sheet_name):
         st.error(f"シート「{sheet_name}」の取得に失敗: {e}")
         return []
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=1)
 def fetch_sheet_realtime(sheet_name):
     """頻繁に更新されるシート用（1分キャッシュ）"""
     try:
@@ -67,7 +67,7 @@ def fetch_sheet_realtime(sheet_name):
         st.error(f"シート「{sheet_name}」の取得に失敗: {e}")
         return []
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=1)
 def load_all_data():
     basic_data  = fetch_sheet_realtime("基本情報")           # 1分
     drug_data   = fetch_sheet_realtime("薬剤情報")           # 1分
