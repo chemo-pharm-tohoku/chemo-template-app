@@ -67,7 +67,7 @@ def fetch_sheet_realtime(sheet_name):
         st.error(f"シート「{sheet_name}」の取得に失敗: {e}")
         return []
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=60)
 def load_all_data():
     basic_data  = fetch_sheet_realtime("基本情報")           # 1分
     drug_data   = fetch_sheet("薬剤情報")                    # 5分
@@ -334,7 +334,7 @@ def show_pd_confirm_ui(protocol_no, drug_data, ae_data, pd_data, master_data, ba
     st.markdown("**確定するPdカテゴリを選択してください：**")
     st.caption(
         "✅ チェックあり：副作用フラグ **○** の薬剤が含まれる（デフォルトON）　"
-        "⬜ チェックなし：副作用フラグ **△** のみの薬剤が含まれる（要確認）"
+        "⬜ チェックなし：副作用フラグ **△** および **脱毛** （要確認・任意）"
     )
 
     selected_ids = []
@@ -851,6 +851,15 @@ def build_o_pd_sheet(wb, protocol_no, basic_data, drug_data,
     pd_cat_raw  = str(basic_row.get("Pdカテゴリ","")).strip()
     pd_cat_list = [x.strip() for x in pd_cat_raw.split("|") if x.strip()]
     matched_pda = [p for p in pda_list if p["カテゴリID"] in pd_cat_list]
+    # 脱毛（PDA007）は手動設定でも、脱毛フラグ○なら△扱いで追加
+    pda007 = next((p for p in (pd_data or []) if p["カテゴリID"] == "PDA007"), None)
+    if pda007 and ae_flags.get("脱毛", False):
+        if not any(p["カテゴリID"] == "PDA007" for p in matched_pda):
+            matched_pda.append(pda007)
+            matched_pda = sorted(
+                matched_pda,
+                key=lambda x: int(x["優先順位"]) if str(x.get("優先順位","")).isdigit() else 99
+            )
 
     # シート生成
     ws = wb.create_sheet("O欄+Pd欄")
@@ -2295,6 +2304,8 @@ regimen_list = [
 ]
 
 st.subheader("📋 レジメン選択")
+st.caption("💡 新規登録したレジメンは最大1分程度で反映されます。"
+           "表示されない場合はしばらく待ってからページを再読み込みしてください。")
 
 if not regimen_list:
     st.error("レジメン一覧が取得できませんでした。")
