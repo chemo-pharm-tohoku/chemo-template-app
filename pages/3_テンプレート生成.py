@@ -2362,6 +2362,12 @@ st.title("💊 テンプレート生成")
 st.caption("登録済みレジメンから Excel・パワポを 生成")
 st.divider()
 
+# キャッシュクリアボタン
+if st.button("🔄 データを最新化する", key="btn_clear_all_cache"):
+    st.cache_data.clear()
+    st.cache_resource.clear()
+    st.rerun()
+
 with st.spinner("スプレッドシートからデータを読み込み中..."):
     basic_data, drug_data, master_data, notes_data, pd_data, ae_data = load_all_data()
 
