@@ -70,10 +70,10 @@ def fetch_sheet_realtime(sheet_name):
 @st.cache_data(ttl=60)
 def load_all_data():
     basic_data  = fetch_sheet_realtime("基本情報")           # 1分
-    drug_data   = fetch_sheet("薬剤情報")                    # 5分
-    master_data = fetch_sheet("薬品マスタ")                  # 5分
+    drug_data   = fetch_sheet_realtime("薬剤情報")           # 1分
+    master_data = fetch_sheet_realtime("薬品マスタ")         # 1分
     notes_data  = fetch_sheet("注意事項")                    # 5分
-    pd_data     = fetch_sheet("Pd")                          # 5分
+    pd_data     = fetch_sheet_realtime("Pd")                 # 1分
     ae_data     = fetch_sheet_realtime("抗がん剤副作用マスタ")  # 1分
     return basic_data, drug_data, master_data, notes_data, pd_data, ae_data
 
