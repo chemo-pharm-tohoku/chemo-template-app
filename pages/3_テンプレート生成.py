@@ -854,9 +854,11 @@ def build_o_pd_sheet(wb, protocol_no, basic_data, drug_data,
 
     # シート生成
     ws = wb.create_sheet("O欄+Pd欄")
+    # O欄の直後（index+1）に移動
     if "O欄" in wb.sheetnames:
-        o_idx = wb.sheetnames.index("O欄")
-        wb.move_sheet("O欄+Pd欄", offset=-(len(wb.sheetnames)-1-o_idx))
+        target_idx = wb.sheetnames.index("O欄") + 1
+        current_idx = wb.sheetnames.index("O欄+Pd欄")
+        wb.move_sheet("O欄+Pd欄", offset=target_idx - current_idx)
     ws.column_dimensions["A"].width = 80
     row = 1
 
@@ -1010,9 +1012,10 @@ def build_o_pd_sheet(wb, protocol_no, basic_data, drug_data,
         if text:
             text_clean = text.replace("\r\n", "\n").replace("\r", "\n")
             lines_pd   = text_clean.split("\n")
-            full_text  = "　【" + cat_name + "】\n" + "\n".join(
+            body       = "\n".join(
                 "　　" + ln for ln in lines_pd if ln.strip()
             )
+            full_text  = "　【" + cat_name + "】\n" + body
         else:
             full_text = "　【" + cat_name + "】"
         line_count = full_text.count("\n") + 1
