@@ -204,6 +204,7 @@ def get_regimen(protocol_no, basic_data, drug_data, master_data):
             '投与経路'             : master.get('投与経路',''),
             '1V当たりmg'           : master.get('1V当たりmg',''),
             '患者向け説明'         : master.get('患者向け説明',''),
+            '短縮注記'             : master.get('短縮注記',''),
         })
         drugs.append(merged)
     return {'basic': basic, 'drugs': drugs, 'master_dict': master_dict}
@@ -2116,11 +2117,14 @@ def create_pptx(protocol_no, basic_data, drug_data,
         if rp != '内服':
             rp_all_groups[rp].append(drug)
 
-    total_min = int(sum(
+    total_min_raw = sum(
         max((safe_float(d.get('投与時間数値', 0))
              for d in rp_drugs), default=0)
         for rp_drugs in rp_all_groups.values()
-    ) * 60)
+    ) * 60
+    # 5分単位で切り上げ
+    import math
+    total_min = int(math.ceil(total_min_raw / 5) * 5)
 
     def get_rp_info(rp_drugs):
         rp_sorted = sorted(rp_drugs,
@@ -2301,6 +2305,20 @@ def create_pptx(protocol_no, basic_data, drug_data,
                     font_size=Pt(14),bold=True,
                     color=COLOR_BLACK,align=PP_ALIGN.LEFT)
         ry += Cm(1.0)
+        # 短縮注記を表示（対象薬剤が含まれる場合）
+        shorten_notes = list(dict.fromkeys([
+            str(master_dict.get(str(d.get('管理コード','')),{}).get('短縮注記',''))
+            for d in drugs
+            if str(master_dict.get(str(d.get('管理コード','')),{}).get('短縮注記','')).strip()
+        ]))
+        if shorten_notes:
+            for sn in shorten_notes:
+                add_textbox(slide,right_x,ry,right_w,Cm(0.6),
+                            text=sn,
+                            font_size=Pt(9),bold=False,
+                            color=RGBColor(0x85,0x64,0x04),
+                            align=PP_ALIGN.LEFT)
+                ry += Cm(0.65)
         add_textbox(slide,right_x,ry,right_w,Cm(0.6),
                     text='東北大学病院　薬剤部',
                     font_size=Pt(12),bold=True,
@@ -2314,6 +2332,20 @@ def create_pptx(protocol_no, basic_data, drug_data,
                     text=f'所要時間の目安：{total_min}分',
                     font_size=Pt(14),bold=True,
                     color=COLOR_BLACK,align=PP_ALIGN.RIGHT)
+        # 短縮注記を表示（対象薬剤が含まれる場合）
+        shorten_notes_b = list(dict.fromkeys([
+            str(master_dict.get(str(d.get('管理コード','')),{}).get('短縮注記',''))
+            for d in drugs
+            if str(master_dict.get(str(d.get('管理コード','')),{}).get('短縮注記','')).strip()
+        ]))
+        if shorten_notes_b:
+            for sn in shorten_notes_b:
+                add_textbox(slide,x0,footer_y+Cm(0.8),cw,Cm(0.5),
+                            text=sn,
+                            font_size=Pt(9),bold=False,
+                            color=RGBColor(0x85,0x64,0x04),
+                            align=PP_ALIGN.LEFT)
+                footer_y += Cm(0.55)
         add_textbox(slide,x0,footer_y+Cm(0.8),cw,Cm(0.6),
                     text='東北大学病院　薬剤部',
                     font_size=Pt(12),bold=True,
