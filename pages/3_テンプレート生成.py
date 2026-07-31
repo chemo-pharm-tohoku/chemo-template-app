@@ -259,8 +259,9 @@ def show_pd_confirm_ui(protocol_no, drug_data, ae_data, pd_data, master_data, ba
     ae_data_fresh = fetch_sheet_realtime("抗がん剤副作用マスタ")
     ae_dict    = {str(r.get("管理コード", "")).strip(): r for r in ae_data_fresh}
     ae_columns = [k for k in ae_data_fresh[0].keys()
-                  if k not in ("管理コード", "一般名（全角）", "登録日")
-                  ] if ae_data_fresh else []
+                  if k not in (
+                      "管理コード", "一般名（全角）", "出典", "登録日"
+                  )] if ae_data_fresh else []
 
 
 
@@ -291,7 +292,8 @@ def show_pd_confirm_ui(protocol_no, drug_data, ae_data, pd_data, master_data, ba
 
         # 副作用列から判定
         for col in ae_columns:
-            if str(ae_row.get(col, '')).strip() == '○':
+            val = str(ae_row.get(col, '')).strip()
+            if val == '○':  # ○のみPdカテゴリトリガー（△は除外）
                 pd_ids = trigger_to_pdid.get(col, [])
                 for pd_id in pd_ids:
                     if pd_id not in pd_evidence:
@@ -420,9 +422,16 @@ def show_ae_register_ui(unregistered, ae_data, master_data, drug_data, basic_dat
     if ae_data:
         all_keys   = list(ae_data[0].keys())
         ae_columns = [k for k in all_keys
-                      if k not in ("管理コード", "一般名（全角）", "登録日")]
+                      if k not in (
+                          "管理コード", "一般名（全角）", "出典", "登録日"
+                      )]
     else:
-        ae_columns = ["骨髄抑制","悪心嘔吐","末梢神経障害","脱毛","下痢","手足症候群","irAE"]
+        ae_columns = [
+            "骨髄抑制","悪心嘔吐","末梢神経障害","脱毛","下痢",
+            "手足症候群","irAE","口腔粘膜炎","皮膚障害",
+            "肝機能障害","腎機能障害","味覚異常","電解質異常",
+            "間質性肺炎","心障害","IRR","HBVスクリーニング",
+        ]
 
     # ae_dataをコードで引けるように辞書化
     ae_dict_reg = {str(r.get("管理コード","")).strip(): r for r in ae_data}
@@ -482,8 +491,9 @@ def show_ae_register_ui(unregistered, ae_data, master_data, drug_data, basic_dat
                 ae_dict_new = {str(r["管理コード"]).strip(): r for r in ae_data_new}
                 # ae_columnsはae_dataのキーから取得
                 ae_cols_new = [k for k in ae_data_new[0].keys()
-                               if k not in ("管理コード", "一般名（全角）", "登録日")
-                               ] if ae_data_new else ae_columns
+                               if k not in (
+                                   "管理コード", "一般名（全角）", "出典", "登録日"
+                               )] if ae_data_new else ae_columns
 
                 # このレジメンのPdカテゴリを再計算
                 protocol_no_upd = st.session_state.get("current_protocol_no", "")
@@ -498,7 +508,8 @@ def show_ae_register_ui(unregistered, ae_data, master_data, drug_data, basic_dat
                         ae_row = ae_dict_new.get(drug_code)
                         if ae_row:
                             for col in ae_cols_new:
-                                if str(ae_row.get(col, "")).strip() == "○":
+                                val = str(ae_row.get(col, "")).strip()
+                                if val == "○":  # ○のみPdカテゴリトリガー（△は除外）
                                     pd_id = trigger_to_pdid.get(col)
                                     if pd_id:
                                         collected.add(pd_id)
