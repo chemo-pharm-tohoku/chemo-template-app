@@ -675,29 +675,25 @@ if "extracted_parsed" in st.session_state:
         st.dataframe(pd.DataFrame(drug_list), use_container_width=True)
 
     with st.expander("🔧 JSONを直接編集する"):
-        # text_areaはkeyで管理（value固定だと編集が消える）
-        # 初回のみ session_state に値をセット
-        if "json_editor_text" not in st.session_state:
-            st.session_state["json_editor_text"] = st.session_state["extracted_json"]
-        # extracted_jsonが更新されたらエディタも同期
-        if st.session_state.get("json_editor_sync", False):
-            st.session_state["json_editor_text"] = st.session_state["extracted_json"]
-            st.session_state["json_editor_sync"] = False
-
-        st.text_area(
-            "JSON",
-            height=400,
-            key="json_editor_text"
-        )
-        if st.button("✅ 編集内容を反映"):
-            _edited = st.session_state.get("json_editor_text", "")
+        # フォームで囲むことで text_area と button を同一送信にする
+        with st.form(key="form_json_editor"):
+            _edited = st.text_area(
+                "JSON",
+                value=st.session_state.get("extracted_json", ""),
+                height=400,
+            )
+            _json_submitted = st.form_submit_button(
+                "✅ 編集内容を反映",
+                type="primary",
+                use_container_width=True
+            )
+        if _json_submitted:
             try:
                 _parsed_new = json.loads(_edited)
                 st.session_state["extracted_json"]   = _edited
                 st.session_state["extracted_parsed"] = _parsed_new
-                st.session_state["json_editor_sync"] = False
-                # 要確認確定状態もリセット
                 st.session_state.pop("yonin_confirmed_1", None)
+                st.session_state.pop("json_editor_text", None)
                 st.success("✅ 反映しました！")
                 st.rerun()
             except json.JSONDecodeError as e:
@@ -898,51 +894,56 @@ if st.session_state.get("registered"):
     # 要確認があれば確認UIを表示
     if _yoninins and not st.session_state.get("yonin_confirmed_1", False):
         st.divider()
-        st.warning(f"⚠️ {len(_yoninins)} 件の「要確認」項目があります。パワポ生成前に入力してください。")
+        st.warning(
+            f"⚠️ {len(_yoninins)} 件の「要確認」項目があります。"
+            "パワポ生成前に入力してください。"
+        )
 
-        with st.form(key="form_yonin_1"):
-            for _item in _yoninins:
-                st.markdown(f"**{_item['drug_name']}　{_item['label']}**")
-                st.text_input(
-                    f"{_item['drug_name']}　{_item['label']} を入力",
-                    key=_item["key"],
-                    placeholder="例：2時間、d1 など",
-                )
-            _submitted = st.form_submit_button(
-                "✅ 入力内容を確定する",
-                type="primary",
-                use_container_width=True
+        # st.form を使わず通常のtext_input＋buttonで実装
+        # → form内のkey競合・送信タイミング問題を回避
+        _all_filled = True
+        for _item in _yoninins:
+            st.markdown(f"**{_item['drug_name']}　{_item['label']}**")
+            _input_val = st.text_input(
+                f"{_item['drug_name']}　{_item['label']} を入力",
+                key=_item["key"],
+                placeholder="例：2時間、d1 など",
             )
+            if not _input_val.strip():
+                _all_filled = False
 
-        if _submitted:
-            # 未入力チェック
-            _missing = [
-                _item for _item in _yoninins
-                if not st.session_state.get(_item["key"], "").strip()
-            ]
-            if _missing:
-                for _m in _missing:
-                    st.error(f"❌ 「{_m['drug_name']}　{_m['label']}」が未入力です")
-                st.stop()
+        st.divider()
+        if not _all_filled:
+            st.warning("⚠️ すべての項目を入力してください")
 
-            # extracted_parsed の drug_info に反映
+        if st.button(
+            "✅ 入力内容を確定する",
+            type="primary",
+            use_container_width=True,
+            key="btn_yonin_confirm",
+            disabled=not _all_filled
+        ):
+            # session_state から入力値を取得して drug_info に反映
             import copy
-            _parsed_new  = copy.deepcopy(_parsed)
-            _drug_list_new = _parsed_new.get("drug_info") or _parsed_new.get("drugs") or []
+            _parsed_new    = copy.deepcopy(_parsed)
+            _drug_list_new = (
+                _parsed_new.get("drug_info") or
+                _parsed_new.get("drugs") or []
+            )
             for _d in _drug_list_new:
-                _name = str(
+                _dname = str(
                     _d.get("product_name") or _d.get("brand_name") or
                     _d.get("management_code") or "不明"
                 ).strip()
                 for _item in _yoninins:
-                    if _item["drug_name"] == _name:
+                    if _item["drug_name"] == _dname:
                         _val = st.session_state.get(_item["key"], "").strip()
                         if _val:
                             _d[_item["k1"]] = _val
                             _d[_item["k2"]] = _val
 
-            st.session_state["extracted_parsed"]   = _parsed_new
-            st.session_state["yonin_confirmed_1"]  = True
+            st.session_state["extracted_parsed"]  = _parsed_new
+            st.session_state["yonin_confirmed_1"] = True
             st.success("✅ 入力内容を確定しました！パワポを生成できます。")
             st.rerun()
 
