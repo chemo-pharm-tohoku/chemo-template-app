@@ -253,7 +253,7 @@ def build_o_text(protocol_no, basic_data, drug_data, master_data,
 
     # 1行目：レジメン名
     lines.append(
-        f"【{protocol_no}】{basic['レジメン名']}"
+        f"O；【{protocol_no}】{basic['レジメン名']}"
         f"(1ｸｰﾙ{basic['1コース日数']}日)"
     )
 
