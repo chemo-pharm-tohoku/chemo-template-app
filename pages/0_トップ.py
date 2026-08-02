@@ -71,6 +71,12 @@ with col_r:
         ):
             st.switch_page("pages/4_O欄Pd欄生成.py")
 
+    st.link_button(
+        "📋 登録済みレジメンを確認する（マスタスプレッドシート）",
+        "https://docs.google.com/spreadsheets/d/1dLEUYSZlrIK1uHqEtEAfS1jSAPpXCIiAiAk_iaRuY-8/edit?gid=0#gid=0",
+        use_container_width=True
+    )
+
 st.divider()
 
 # ===== 管理・設定 =====
@@ -92,8 +98,9 @@ with st.container(border=True):
     with col2:
         st.caption(
             "Pd カテゴリは、Pd欄に記載する患者さんに説明した文章を設定します。"
-            "（[Pd シート]"
-            "(https://docs.google.com/spreadsheets/d/1dLEUYSZlrIK1uHqEtEAfS1jSAPpXCIiAiAk_iaRuY-8/edit?gid=224247887#gid=224247887)）"
+            "（PdカテゴリIDは、"
+            "[Pd シート](https://docs.google.com/spreadsheets/d/1dLEUYSZlrIK1uHqEtEAfS1jSAPpXCIiAiAk_iaRuY-8/edit?gid=224247887#gid=224247887)"
+            " 参照）"
         )
 
     st.markdown("")
@@ -124,8 +131,7 @@ with st.container(border=True):
         )
     with col2:
         st.caption(
-            "患者さんに説明した副作用内容を編集できます。\n"
-            "⚠️ 本マスタを編集するとシステム全体に影響します。"
+            "患者さんに説明した副作用内容を編集できます。"
         )
 
     st.markdown("")
@@ -143,6 +149,9 @@ with st.container(border=True):
             "テンプレート生成ページでレジメンの副作用を登録する際の "
             "チェックボックスが表示されます。"
         )
+
+    st.markdown("")
+    st.warning("⚠️ 本マスタを編集するとシステム全体に影響します。")
 
 st.divider()
 
