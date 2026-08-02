@@ -836,7 +836,7 @@ else:
 st.divider()
 
 # ===== STEP5: パワポ生成 =====
-st.subheader("STEP 5　スケジュールシール パワポ生成")
+st.subheader("STEP 5　（外来化療）スケジュールシール パワポ生成")
 
 if st.session_state.get("registered"):
     protocol_no_reg = st.session_state.get("registered_protocol","")
