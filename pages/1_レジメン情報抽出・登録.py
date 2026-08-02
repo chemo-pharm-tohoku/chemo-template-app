@@ -843,10 +843,14 @@ if st.session_state.get("registered"):
     st.info(f"📋 対象レジメン：{protocol_no_reg}")
 
     # 要確認フィールド定義
+    # 要確認フィールド定義
+    # (JSONキー1, JSONキー2, 表示ラベル)
+    # ※ dosage_value は数値型なので要確認文字列にならない → 対象外
     YONIN_FIELDS = [
-        ("admin_time_text",    "infusion_time_text", "投与時間"),
-        ("dosage_value",       "dose_value",         "投与量"),
-        ("admin_day_text",     "day_text",            "投与Day"),
+        ("admin_time_text",  "infusion_time_text", "投与時間"),
+        ("admin_day_text",   "day_text",            "投与Day"),
+        ("diluent_volume",   "diluent_volume",      "希釈液容量"),
+        ("management_code",  "management_code",     "管理コード"),
     ]
 
     # 登録済みのdrug_infoから要確認を抽出
@@ -970,6 +974,13 @@ if st.session_state.get("registered"):
                         _day = _patch_map.get((_dname, "投与Day"))
                         if _day:
                             _dd["投与Day文字"] = _day
+                        # 希釈液容量
+                        _dil = _patch_map.get((_dname, "希釈液容量"))
+                        if _dil:
+                            try:
+                                _dd["希釈液容量"] = float(_dil)
+                            except:
+                                _dd["希釈液容量"] = _dil
 
                     pptx_data = create_pptx(
                         protocol_no_reg, basic_data,
