@@ -2530,6 +2530,7 @@ if selected_basic:
 
 st.divider()
 st.subheader("📁 ファイル生成")
+st.info("📋 カルテ貼り付け用テキストの生成はこちら → [O欄・Pd欄 テキスト生成](/O欄Pd欄生成)")
 
 col_excel, col_pptx = st.columns(2)
 
@@ -2554,7 +2555,7 @@ with col_excel:
             st.error("❌ 生成に失敗しました")
 
 with col_pptx:
-    if st.button("📑 パワポ生成", use_container_width=True, type="primary"):
+    if st.button("📑 パワポ（外来スケジュールシール）作成", use_container_width=True, type="primary"):
         with st.spinner("パワポ生成中..."):
             pptx_data = create_pptx(
                 protocol_no, basic_data,
