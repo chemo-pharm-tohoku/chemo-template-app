@@ -2529,8 +2529,17 @@ if selected_basic:
         pass
 
 st.divider()
+st.subheader("📋 テキスト生成")
+if st.button(
+    "📋 O欄・Pd欄 テキスト生成",
+    type="primary",
+    use_container_width=True,
+    key="btn_go_text_gen"
+):
+    st.switch_page("pages/4_O欄Pd欄生成.py")
+
+st.divider()
 st.subheader("📁 ファイル生成")
-st.info("📋 カルテ貼り付け用テキストの生成はこちら → [O欄・Pd欄 テキスト生成](/O欄Pd欄生成)")
 
 col_excel, col_pptx = st.columns(2)
 
