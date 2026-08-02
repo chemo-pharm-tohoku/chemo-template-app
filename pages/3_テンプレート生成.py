@@ -2386,7 +2386,7 @@ if not basic_data:
 
 regimen_list = [
     f"{b['プロトコールNo']}　{b['レジメン名']}"
-    for b in basic_data
+    for b in reversed(basic_data)
     if b.get('プロトコールNo','').strip()
 ]
 
