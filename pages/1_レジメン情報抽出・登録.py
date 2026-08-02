@@ -957,22 +957,33 @@ if st.session_state.get("registered"):
                      type="primary", use_container_width=True):
             with st.spinner("パワポ生成中..."):
                 try:
+                    import copy, re as _re
+
                     sh          = get_spreadsheet()
                     basic_data  = sh.worksheet("基本情報").get_all_records()
                     master_data, notes_data = load_master_data()
-
-                    # 確定済みのdrug_dataをスプレッドシートから取得
                     drug_data_ss = sh.worksheet("薬剤情報").get_all_records()
 
-                    # 要確認を入力値で上書き（スプレッドシートデータに反映）
-                    import copy
-                    _drug_data_use = copy.deepcopy(drug_data_ss)
                     _parsed_now    = st.session_state.get("extracted_parsed", {})
                     _drug_list_now = (
                         _parsed_now.get("drug_info") or
                         _parsed_now.get("drugs") or []
                     )
-                    # 商品名→投与時間 の対応辞書を作成
+
+                    # ── 投与時間テキスト→時間数値 変換 ──────────────
+                    def _parse_time_hours(text):
+                        """
+                        "1時間" → 1.0 / "30分" → 0.5
+                        "1時間30分" → 1.5 / "90分" → 1.5
+                        """
+                        text = str(text).strip()
+                        h = _re.search(r'(\d+)\s*時間', text)
+                        m = _re.search(r'(\d+)\s*分',   text)
+                        hours   = int(h.group(1)) if h else 0
+                        minutes = int(m.group(1)) if m else 0
+                        return hours + minutes / 60
+
+                    # ── 商品名→修正値 の対応辞書を作成 ───────────────
                     _patch_map = {}
                     for _d in _drug_list_now:
                         _pname = str(
@@ -983,25 +994,72 @@ if st.session_state.get("registered"):
                             if _v and _v != "要確認":
                                 _patch_map[(_pname, _label)] = _v
 
+                    # ── drug_data_ss に反映（パワポ用） ───────────────
+                    _drug_data_use = copy.deepcopy(drug_data_ss)
                     for _dd in _drug_data_use:
                         if str(_dd.get("プロトコールNo","")).strip() != protocol_no_reg:
                             continue
                         _dname = str(_dd.get("商品名","")).strip()
-                        # 投与時間文字
+
                         _t = _patch_map.get((_dname, "投与時間"))
                         if _t:
-                            _dd["投与時間文字"] = _t
-                        # 投与Day文字
+                            _dd["投与時間文字"]  = _t
+                            # 数値も更新（所要時間計算に使用）
+                            _dd["投与時間数値"] = _parse_time_hours(_t)
+
                         _day = _patch_map.get((_dname, "投与Day"))
                         if _day:
                             _dd["投与Day文字"] = _day
-                        # 希釈液容量
+
                         _dil = _patch_map.get((_dname, "希釈液容量"))
                         if _dil:
                             try:
                                 _dd["希釈液容量"] = float(_dil)
                             except:
                                 _dd["希釈液容量"] = _dil
+
+                    # ── スプレッドシートに書き戻し ────────────────────
+                    if st.session_state.get("yonin_confirmed_1", False):
+                        try:
+                            import time as _time
+                            ws_drug_wb = sh.worksheet("薬剤情報")
+                            _all_vals  = ws_drug_wb.get_all_values()
+                            _headers   = _all_vals[0]
+
+                            # 列インデックスを取得
+                            def _col_idx(name):
+                                return _headers.index(name) + 1 if name in _headers else None
+
+                            _col_time_text = _col_idx("投与時間文字")
+                            _col_time_num  = _col_idx("投与時間数値")
+                            _col_day_text  = _col_idx("投与Day文字")
+
+                            for _row_i, _row in enumerate(_all_vals[1:], start=2):
+                                if not _row:
+                                    continue
+                                _pno = _row[0].strip() if len(_row) > 0 else ""
+                                if _pno != protocol_no_reg:
+                                    continue
+                                _dname_ss = _row[3].strip() if len(_row) > 3 else ""
+
+                                _t = _patch_map.get((_dname_ss, "投与時間"))
+                                if _t and _col_time_text:
+                                    ws_drug_wb.update_cell(_row_i, _col_time_text, _t)
+                                    if _col_time_num:
+                                        ws_drug_wb.update_cell(
+                                            _row_i, _col_time_num,
+                                            _parse_time_hours(_t)
+                                        )
+                                    _time.sleep(0.5)  # API制限対策
+
+                                _day = _patch_map.get((_dname_ss, "投与Day"))
+                                if _day and _col_day_text:
+                                    ws_drug_wb.update_cell(_row_i, _col_day_text, _day)
+                                    _time.sleep(0.5)
+
+                            st.success("✅ スプレッドシートの要確認項目を更新しました")
+                        except Exception as _wb_e:
+                            st.warning(f"⚠️ スプレッドシート書き戻しエラー: {_wb_e}")
 
                     pptx_data = create_pptx(
                         protocol_no_reg, basic_data,
