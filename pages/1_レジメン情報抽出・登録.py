@@ -835,38 +835,161 @@ else:
 
 st.divider()
 
-# ===== STEP5: パワポ生成 =====
+# ===== STEP5: 要確認項目チェック =====
 st.subheader("STEP 5　（外来化療）スケジュールシール パワポ生成")
 
 if st.session_state.get("registered"):
-    protocol_no_reg = st.session_state.get("registered_protocol","")
+    protocol_no_reg = st.session_state.get("registered_protocol", "")
     st.info(f"📋 対象レジメン：{protocol_no_reg}")
 
-    if st.button("📑 パワポ生成", type="primary", use_container_width=True):
-        with st.spinner("パワポ生成中..."):
-            try:
-                sh          = get_spreadsheet()
-                basic_data  = sh.worksheet("基本情報").get_all_records()
-                drug_data   = sh.worksheet("薬剤情報").get_all_records()
-                master_data, notes_data = load_master_data()
-                pptx_data   = create_pptx(
-                    protocol_no_reg, basic_data, drug_data, master_data, notes_data
-                )
-            except Exception as e:
-                st.error(f"データ取得エラー: {e}")
-                pptx_data = None
+    # 要確認フィールド定義
+    YONIN_FIELDS = [
+        ("admin_time_text",    "infusion_time_text", "投与時間"),
+        ("dosage_value",       "dose_value",         "投与量"),
+        ("admin_day_text",     "day_text",            "投与Day"),
+    ]
 
-        if pptx_data:
-            st.download_button(
-                label="⬇️ パワポをダウンロード",
-                data=pptx_data,
-                file_name=f"{protocol_no_reg}_スケジュールシール_AI作成要チェック_{today_str}.pptx",
-                mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    # 登録済みのdrug_infoから要確認を抽出
+    _parsed    = st.session_state.get("extracted_parsed", {})
+    _drug_list = _parsed.get("drug_info") or _parsed.get("drugs") or []
+
+    _yoninins = []
+    for _d in _drug_list:
+        _name = str(
+            _d.get("product_name") or _d.get("brand_name") or
+            _d.get("management_code") or "不明"
+        ).strip()
+        for _k1, _k2, _label in YONIN_FIELDS:
+            _val = str(_d.get(_k1) or _d.get(_k2) or "").strip()
+            if _val == "要確認":
+                _key = f"yonin1_{protocol_no_reg}_{_d.get('management_code',_name)}_{_k1}"
+                _yoninins.append({
+                    "drug_name": _name,
+                    "k1"       : _k1,
+                    "k2"       : _k2,
+                    "label"    : _label,
+                    "key"      : _key,
+                })
+
+    # 要確認があれば確認UIを表示
+    if _yoninins and not st.session_state.get("yonin_confirmed_1", False):
+        st.divider()
+        st.warning(f"⚠️ {len(_yoninins)} 件の「要確認」項目があります。パワポ生成前に入力してください。")
+
+        with st.form(key="form_yonin_1"):
+            for _item in _yoninins:
+                st.markdown(f"**{_item['drug_name']}　{_item['label']}**")
+                st.text_input(
+                    f"{_item['drug_name']}　{_item['label']} を入力",
+                    key=_item["key"],
+                    placeholder="例：2時間、d1 など",
+                )
+            _submitted = st.form_submit_button(
+                "✅ 入力内容を確定する",
+                type="primary",
                 use_container_width=True
             )
-            st.success("✅ パワポ生成完了！")
-        else:
-            st.error("❌ 生成に失敗しました")
+
+        if _submitted:
+            # 未入力チェック
+            _missing = [
+                _item for _item in _yoninins
+                if not st.session_state.get(_item["key"], "").strip()
+            ]
+            if _missing:
+                for _m in _missing:
+                    st.error(f"❌ 「{_m['drug_name']}　{_m['label']}」が未入力です")
+                st.stop()
+
+            # extracted_parsed の drug_info に反映
+            import copy
+            _parsed_new  = copy.deepcopy(_parsed)
+            _drug_list_new = _parsed_new.get("drug_info") or _parsed_new.get("drugs") or []
+            for _d in _drug_list_new:
+                _name = str(
+                    _d.get("product_name") or _d.get("brand_name") or
+                    _d.get("management_code") or "不明"
+                ).strip()
+                for _item in _yoninins:
+                    if _item["drug_name"] == _name:
+                        _val = st.session_state.get(_item["key"], "").strip()
+                        if _val:
+                            _d[_item["k1"]] = _val
+                            _d[_item["k2"]] = _val
+
+            st.session_state["extracted_parsed"]   = _parsed_new
+            st.session_state["yonin_confirmed_1"]  = True
+            st.success("✅ 入力内容を確定しました！パワポを生成できます。")
+            st.rerun()
+
+    else:
+        # 要確認なし or 確定済み → パワポ生成ボタン表示
+        if st.session_state.get("yonin_confirmed_1", False):
+            st.success("✅ 要確認項目の入力が完了しています。")
+
+        st.divider()
+        if st.button("📑 パワポ（外来スケジュールシール）作成",
+                     type="primary", use_container_width=True):
+            with st.spinner("パワポ生成中..."):
+                try:
+                    sh          = get_spreadsheet()
+                    basic_data  = sh.worksheet("基本情報").get_all_records()
+                    master_data, notes_data = load_master_data()
+
+                    # 確定済みのdrug_dataをスプレッドシートから取得
+                    drug_data_ss = sh.worksheet("薬剤情報").get_all_records()
+
+                    # 要確認を入力値で上書き（スプレッドシートデータに反映）
+                    import copy
+                    _drug_data_use = copy.deepcopy(drug_data_ss)
+                    _parsed_now    = st.session_state.get("extracted_parsed", {})
+                    _drug_list_now = (
+                        _parsed_now.get("drug_info") or
+                        _parsed_now.get("drugs") or []
+                    )
+                    # 商品名→投与時間 の対応辞書を作成
+                    _patch_map = {}
+                    for _d in _drug_list_now:
+                        _pname = str(
+                            _d.get("product_name") or _d.get("brand_name") or ""
+                        ).strip()
+                        for _k1, _k2, _label in YONIN_FIELDS:
+                            _v = str(_d.get(_k1) or _d.get(_k2) or "").strip()
+                            if _v and _v != "要確認":
+                                _patch_map[(_pname, _label)] = _v
+
+                    for _dd in _drug_data_use:
+                        if str(_dd.get("プロトコールNo","")).strip() != protocol_no_reg:
+                            continue
+                        _dname = str(_dd.get("商品名","")).strip()
+                        # 投与時間文字
+                        _t = _patch_map.get((_dname, "投与時間"))
+                        if _t:
+                            _dd["投与時間文字"] = _t
+                        # 投与Day文字
+                        _day = _patch_map.get((_dname, "投与Day"))
+                        if _day:
+                            _dd["投与Day文字"] = _day
+
+                    pptx_data = create_pptx(
+                        protocol_no_reg, basic_data,
+                        _drug_data_use, master_data, notes_data
+                    )
+                except Exception as e:
+                    st.error(f"データ取得エラー: {e}")
+                    pptx_data = None
+
+            if pptx_data:
+                st.download_button(
+                    label="⬇️ パワポをダウンロード",
+                    data=pptx_data,
+                    file_name=f"{protocol_no_reg}_スケジュールシール_AI作成要チェック_{today_str}.pptx",
+                    mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                    use_container_width=True
+                )
+                st.success("✅ パワポ生成完了！")
+            else:
+                st.error("❌ 生成に失敗しました")
 
     st.divider()
     st.info("続けてどうしますか？")
@@ -890,8 +1013,16 @@ if st.session_state.get("registered"):
         use_container_width=True,
         key="btn_next_new"
     ):
-        for key in ["extracted_json","extracted_parsed","registered","registered_protocol"]:
+        for key in [
+            "extracted_json", "extracted_parsed",
+            "registered", "registered_protocol",
+            "yonin_confirmed_1",
+        ]:
             st.session_state.pop(key, None)
+        # 要確認入力値もクリア
+        for key in list(st.session_state.keys()):
+            if key.startswith("yonin1_"):
+                del st.session_state[key]
         st.rerun()
 else:
     st.info("👆 STEP4で登録が完了するとパワポ生成ボタンが表示されます")
