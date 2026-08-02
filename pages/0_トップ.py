@@ -4,7 +4,7 @@ st.set_page_config(
     page_title="ケモテンプレートシステム",
     page_icon="💊",
     layout="centered",
-    initial_sidebar_ebar="expanded",
+    initial_sidebar_state="expanded",
     menu_items={}
 )
 
