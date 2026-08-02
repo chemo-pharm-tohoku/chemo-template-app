@@ -635,7 +635,9 @@ if uploaded:
                     parsed   = json.loads(json_str)
                     st.session_state["extracted_json"]   = json_str
                     st.session_state["extracted_parsed"] = parsed
+                    st.session_state["json_editor_sync"] = True
                     st.session_state.pop("registered", None)
+                    st.session_state.pop("yonin_confirmed_1", None)
                     st.success("✅ 解析完了！")
                 else:
                     st.error("JSONの抽出に失敗しました。もう一度試してください。")
@@ -673,12 +675,30 @@ if "extracted_parsed" in st.session_state:
         st.dataframe(pd.DataFrame(drug_list), use_container_width=True)
 
     with st.expander("🔧 JSONを直接編集する"):
-        edited = st.text_area("JSON", value=st.session_state["extracted_json"], height=400)
+        # text_areaはkeyで管理（value固定だと編集が消える）
+        # 初回のみ session_state に値をセット
+        if "json_editor_text" not in st.session_state:
+            st.session_state["json_editor_text"] = st.session_state["extracted_json"]
+        # extracted_jsonが更新されたらエディタも同期
+        if st.session_state.get("json_editor_sync", False):
+            st.session_state["json_editor_text"] = st.session_state["extracted_json"]
+            st.session_state["json_editor_sync"] = False
+
+        st.text_area(
+            "JSON",
+            height=400,
+            key="json_editor_text"
+        )
         if st.button("✅ 編集内容を反映"):
+            _edited = st.session_state.get("json_editor_text", "")
             try:
-                st.session_state["extracted_json"]   = edited
-                st.session_state["extracted_parsed"] = json.loads(edited)
-                st.success("反映しました！")
+                _parsed_new = json.loads(_edited)
+                st.session_state["extracted_json"]   = _edited
+                st.session_state["extracted_parsed"] = _parsed_new
+                st.session_state["json_editor_sync"] = False
+                # 要確認確定状態もリセット
+                st.session_state.pop("yonin_confirmed_1", None)
+                st.success("✅ 反映しました！")
                 st.rerun()
             except json.JSONDecodeError as e:
                 st.error(f"JSONの形式が正しくありません: {e}")
@@ -1028,6 +1048,7 @@ if st.session_state.get("registered"):
             "extracted_json", "extracted_parsed",
             "registered", "registered_protocol",
             "yonin_confirmed_1",
+            "json_editor_text", "json_editor_sync",
         ]:
             st.session_state.pop(key, None)
         # 要確認入力値もクリア
