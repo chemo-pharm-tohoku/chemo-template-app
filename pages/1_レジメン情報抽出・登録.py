@@ -870,17 +870,28 @@ if st.session_state.get("registered"):
 
     st.divider()
     st.info("続けてどうしますか？")
-    col1, col2 = st.columns(2)
-    with col1:
-        st.page_link(
-            "pages/3_テンプレート生成.py",
-            label="📊 テンプレート生成ページへ（Excel・Pd欄など）",
-            use_container_width=True
-        )
-    with col2:
-        if st.button("🔄 続けて別のレジメンを登録する", use_container_width=True):
-            for key in ["extracted_json","extracted_parsed","registered","registered_protocol"]:
-                st.session_state.pop(key, None)
-            st.rerun()
+
+    if st.button(
+        "📋 パラメータ入力しテキスト生成ページへ（O欄・Pd欄テキストコピー）",
+        use_container_width=True,
+        key="btn_next_text"
+    ):
+        st.switch_page("pages/4_O欄Pd欄生成.py")
+
+    if st.button(
+        "📊 テンプレート生成ページへ（Excel生成）",
+        use_container_width=True,
+        key="btn_next_excel"
+    ):
+        st.switch_page("pages/3_テンプレート生成.py")
+
+    if st.button(
+        "🔄 続けて別のレジメンを登録する",
+        use_container_width=True,
+        key="btn_next_new"
+    ):
+        for key in ["extracted_json","extracted_parsed","registered","registered_protocol"]:
+            st.session_state.pop(key, None)
+        st.rerun()
 else:
     st.info("👆 STEP4で登録が完了するとパワポ生成ボタンが表示されます")
