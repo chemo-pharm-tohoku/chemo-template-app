@@ -2647,7 +2647,6 @@ if selected_basic and result:
         _param_lines.append("\t\t\t")
 
     _param_tsv = "\n".join(_param_lines)
-    _param_tsv = "\n".join(_param_lines)
 
     # ── G列：O欄・Pd欄 TSV ──
     _regimen_name = _basic.get("レジメン名","")
