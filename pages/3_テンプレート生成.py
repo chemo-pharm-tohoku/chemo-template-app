@@ -2568,7 +2568,7 @@ if selected_basic and result:
     _R_DRUG_TOP = 14
 
     def _mark(needed):
-        return "" if needed else "×"
+        return "" if needed else "×入力不要"
 
     # ── A列：パラメータ入力欄 TSV ──
     _param_lines = [
@@ -2642,7 +2642,7 @@ if selected_basic and result:
     _o_lines = [
         "【O欄・Pd欄】\t\t\t\t\t\t",
         f"●化学療法：【{protocol_no}】{_regimen_name}（1コース{_course_days}日）\t\t\t\t\t\t",
-        f"=B{_R_COURSE}\tコース目\t開始日\t=B{_R_START}\t\t",
+        f"=B{_R_COURSE}\tコース目\t開始日\t=B{_R_START}",
     ]
 
     for _d in _cancer_drugs:
@@ -2692,14 +2692,100 @@ if selected_basic and result:
         _o_lines.append(f"支持療法：{'、'.join(_inj_parts)}\t\t\t\t\t")
     if _oral_parts:
         _o_lines.append(f"　　　　　{'、'.join(_oral_parts)}\t\t\t\t\t")
+    # ── HBV〜Pd欄テキストを取得して追加 ──
+    from pages_utils_dummy import dummy  # ← これは不要、直接生成
+    _ae_flags_tsv = {}
+    _ae_dict_tsv  = {str(r.get("管理コード","")).strip(): r for r in ae_data}
+    _cancer_codes_tsv = [
+        str(d.get("管理コード","")).strip()
+        for d in drug_data
+        if str(d.get("プロトコールNo","")).strip() == protocol_no
+        and str(d.get("管理コード","")).strip().startswith("AC")
+    ]
+    for _c in _cancer_codes_tsv:
+        _ae_row_tsv = _ae_dict_tsv.get(_c, {})
+        for _cn, _cv in _ae_row_tsv.items():
+            if str(_cv).strip() == "○":
+                _ae_flags_tsv[_cn] = True
 
+    # HBV
+    _o_lines.append("")
+    _o_lines.append("●B型肝炎スクリーニング\t\t\t\t\t\t")
+    _o_lines.append("　HBs-AG：□－　□＋　、HBs-AB：□－　□＋　、HBc-AB：□－　□＋\t\t\t\t\t\t")
+    _o_lines.append("　※＋がある場合→HBV-DNA　□検出限界以下（　　　　）\t\t\t\t\t\t")
+    _o_lines.append("")
+
+    # 副作用評価
+    _AE_ITEMS_TSV = [
+        ("●嘔吐　　　　　　□なし　□あり　(嘔吐回数;　　　)", True, None),
+        ("●悪心　　　　　　□なし　□G1　□G2　□G3", True, None),
+        ("●食欲不振　　　　□なし　□G1　□G2　□G3　□G4", True, None),
+        ("●便秘　　　　　　□なし　□あり（ベースライン 回数：　　　、BS：　　　）", True, None),
+        ("●倦怠感　　　　　□なし　□G1　□G2　□G3", True, None),
+        ("●骨髄抑制 WBC/Neut/Hb/PLT　各□なし〜□G4", True, None),
+        ("●肝機能障害　　　□なし　□あり", True, None),
+        ("●腎機能障害　　　□なし　□あり", True, None),
+        ("●電解質異常　　　□なし　□あり", True, None),
+        ("●下痢　　　　　　□なし　□あり", False, "下痢"),
+        ("●口腔粘膜炎　　　□なし　□G1　□G2　□G3　□G4", False, "口腔粘膜炎"),
+        ("●脱毛　　　　　　□なし　□G1　□G2", False, "脱毛"),
+        ("●末梢神経障害　　□なし　□G1　□G2　□G3　□G4", False, "末梢神経障害"),
+        ("●味覚異常　　　　□なし　□G1　□G2", False, "味覚異常"),
+        ("●IRR　　　　　　 □なし　□あり", False, "IRR"),
+        ("●手足症候群　　　□なし　□G1　□G2　□G3", False, "手足症候群"),
+        ("●皮膚障害　　　　□なし　□あり", False, "皮膚障害"),
+        ("●間質性肺炎　　　□なし　□あり", False, "間質性肺炎"),
+        ("●心障害　　　　　□なし　□あり", False, "心障害"),
+        ("●その他（　　　　　　　　　　　）", True, None),
+    ]
+    _o_lines.append("◇副作用\t\t\t\t\t\t")
+    for _txt, _always, _flag in _AE_ITEMS_TSV:
+        if not _always and not _ae_flags_tsv.get(_flag, False):
+            continue
+        _o_lines.append(f"{_txt}\t\t\t\t\t\t")
+    _o_lines.append("")
+
+    # irAE
+    if _ae_flags_tsv.get("irAE", False):
+        _o_lines.append("◇irAE\t\t\t\t\t\t")
+        for _item in [
+            "　●IP様症状(空咳･呼吸困難感)　□なし　□あり",
+            "　●肝機能異常　□なし　□あり",
+            "　●腎機能異常　□なし　□あり",
+            "　●甲状腺機能異常　□なし　□あり",
+            "　●皮膚障害　□なし　□あり",
+            "　●その他（　　　　　　）",
+        ]:
+            _o_lines.append(f"{_item}\t\t\t\t\t\t")
+        _o_lines.append("")
+
+    # Pd欄
+    _basic_row_tsv = next(
+        (b for b in basic_data if b["プロトコールNo"] == protocol_no), {}
+    )
+    _pd_cat_raw = str(_basic_row_tsv.get("Pdカテゴリ","")).strip()
+    _pd_cat_list = [x.strip() for x in _pd_cat_raw.split("|") if x.strip()]
+    _matched_pda = sorted(
+        [p for p in pd_data
+         if str(p.get("種別","")).strip() == "A"
+         and p.get("カテゴリID","") in _pd_cat_list],
+        key=lambda x: int(x["優先順位"]) if str(x.get("優先順位","")).isdigit() else 99
+    )
+    _o_lines.append("Pd；ご本人に対して初回面談実施。服薬状況、服薬理解度および有害事象の発現状況の確認を行った。\t\t\t\t\t\t")
+    _o_lines.append("化学療法のしおり、メーカー作成パンフレット（パンフレット名記載）、添付する説明書を用いて説明した。\t\t\t\t\t\t")
+    for _pda in _matched_pda:
+        _cat  = str(_pda.get("カテゴリ名","")).strip()
+        _text = str(_pda.get("説明文","")).strip().replace("\n","　").replace("\r","")
+        _o_lines.append(f"【{_cat}】{_text}\t\t\t\t\t\t")
+    _o_lines.append("※個別の薬剤に関する説明事項等も追記（必須）\t\t\t\t\t\t")
+    
     _o_tsv = "\n".join(_o_lines)
 
     # ── O列：手帳シール TSV ──
     _seal_lines = [
         "【手帳シール】\t\t\t",
         f"●化学療法：【{protocol_no}】{_regimen_name}（1コース{_course_days}日）\t\t\t",
-        f"=B{_R_COURSE}\tコース目\t開始日\t=B{_R_START}",
+        f"=B{_R_COURSE}\tコース目\t開始日\t=TEXT(B{_R_START},\"YYYY/M/D\")",
         "",
         "＜抗がん薬＞\t\t\t",
     ]
