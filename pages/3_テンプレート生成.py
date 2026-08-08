@@ -2686,8 +2686,10 @@ if selected_basic and result:
         else:                       _nd = _name_h
 
         if _dbase == "固定用量":
-            # 固定用量：理論値・処方量欄なし
-            _o_lines.append(f"{_nd}\t\t\t\t\t({_day})")
+            # 固定用量：理論値=処方量=固定値・100%固定
+            _o_lines.append(
+                f"{_nd}\t理論値(mg)：\t=B{_dr}\t処方量(mg)：\t=B{_dr}\t100%\t({_day})"
+            )
         elif not _dr:
             _o_lines.append(f"{_nd}\t\t\t\t\t({_day})")
         else:
@@ -2837,11 +2839,7 @@ if selected_basic and result:
         else:                       _nd2 = _nf
 
         if _dbase == "固定用量":
-            _seal_lines.append(f"{_nd2}\t\t\t({_day})")
-        elif not _dr:
-            _seal_lines.append(f"{_nd2}\t\t\t({_day})")
-        else:
-            _seal_lines.append(f"{_nd2}\t処方量(mg)：\t=C{_dr}\t({_day})")
+            _seal_lines.append(f"{_nd2}\t処方量(mg)：\t=B{_dr}\t({_day})")
 
     if _support_inj or _support_oral:
         _seal_lines += ["", "＜支持療法＞\t\t\t"]
