@@ -2693,7 +2693,7 @@ if selected_basic and result:
     if _oral_parts:
         _o_lines.append(f"　　　　　{'、'.join(_oral_parts)}\t\t\t\t\t")
     # ── HBV〜Pd欄テキストを取得して追加 ──
-    from pages_utils_dummy import dummy  # ← これは不要、直接生成
+
     _ae_flags_tsv = {}
     _ae_dict_tsv  = {str(r.get("管理コード","")).strip(): r for r in ae_data}
     _cancer_codes_tsv = [
