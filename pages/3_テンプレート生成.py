@@ -2532,6 +2532,8 @@ st.divider()
 st.subheader("📊 Excel貼り付け用テンプレート生成")
 st.caption("まっさらなExcelシートに貼り付けてご使用ください")
 
+result = get_regimen(protocol_no, basic_data, drug_data, master_data)
+
 if selected_basic and result:
     import streamlit.components.v1 as _components
 
