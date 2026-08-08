@@ -2585,11 +2585,11 @@ if selected_basic and result:
         _ccr_f = f"=(140-B{_R_AGE})*B{_R_BW}/(72*B{_R_SCR})*B{_R_SEX}"
         _param_lines.append(f"Ccr(mL/min)\t{_ccr_f}\t（自動計算）")
     else:
-        _param_lines.append("Ccr(mL/min)\t\t×")
+        _param_lines.append("Ccr(mL/min)\t\t×入力不要")
 
     _param_lines += [
-        f"開始日\t\t\t← YYYY/M/D形式で入力",
-        f"コース目\t\t\t← 数値を入力",
+        f"開始日\t← YYYY/M/D形式で入力\t",
+        f"コース目\t← 数値を入力\t",
         "",
         "【投与量】\t\t\t",
         "薬剤名\t理論値\t投与量(mg)\t%",
