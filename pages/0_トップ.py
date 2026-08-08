@@ -44,7 +44,7 @@ with col_l:
     with st.container(border=True):
         st.markdown("#### 📊 テンプレート Excel 生成")
         st.write(
-            "登録済みレジメンから Excel を生成。\n"
+            "登録済みレジメンから Excel、またはExcelに貼り付けるテキスト を生成。\n"
             "Pd（説明した内容）カテゴリ確認・副作用登録もこちら。"
         )
         if st.button(
@@ -57,7 +57,7 @@ with col_l:
 
 with col_r:
     with st.container(border=True):
-        st.markdown("#### 📋 テンプレート テキスト生成")
+        st.markdown("#### 📋 個人テキスト生成")
         st.write(
             "登録済みレジメンからパラメータを入力し "
             "O欄・Pd欄のテキストを生成。\n"
