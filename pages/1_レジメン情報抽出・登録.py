@@ -358,14 +358,12 @@ def create_pptx(protocol_no, basic_data, drug_data,
              for d in rp_drugs), default=0)
         for rp_drugs in rp_all_groups.values()
     ) * 60
-    # 5分単位で切り上げ
     import math
     total_min = int(math.ceil(total_min_raw / 5) * 5)
 
     def get_rp_info(rp_drugs):
         rp_sorted = sorted(rp_drugs,
                            key=lambda d: INJECTION_ORDER.get(str(d.get('支持療法分類','')),99))
-        # 輸液系（IV系）を除外して薬品マスタの採用商品名を優先
         names = [
             str(d.get('採用商品名（全角）','') or d.get('商品名',''))
             for d in rp_sorted
@@ -550,7 +548,6 @@ def create_pptx(protocol_no, basic_data, drug_data,
                     font_size=Pt(14),bold=True,
                     color=COLOR_BLACK,align=PP_ALIGN.LEFT)
         ry += Cm(1.0)
-        # 短縮注記を表示（対象薬剤が含まれる場合）
         shorten_notes = []
         for _d in drugs:
             _sn = str(_d.get('短縮注記','')).strip()
@@ -559,8 +556,7 @@ def create_pptx(protocol_no, basic_data, drug_data,
         if shorten_notes:
             for sn in shorten_notes:
                 add_textbox(slide,right_x,ry,right_w,Cm(0.6),
-                            text=sn,
-                            font_size=Pt(9),bold=False,
+                            text=sn,font_size=Pt(9),bold=False,
                             color=RGBColor(0x85,0x64,0x04),
                             align=PP_ALIGN.LEFT)
                 ry += Cm(0.65)
@@ -577,7 +573,6 @@ def create_pptx(protocol_no, basic_data, drug_data,
                     text=f'所要時間の目安：{total_min}分',
                     font_size=Pt(14),bold=True,
                     color=COLOR_BLACK,align=PP_ALIGN.RIGHT)
-        # 短縮注記を表示（対象薬剤が含まれる場合）
         shorten_notes_b = []
         for _d in drugs:
             _sn = str(_d.get('短縮注記','')).strip()
@@ -586,8 +581,7 @@ def create_pptx(protocol_no, basic_data, drug_data,
         if shorten_notes_b:
             for sn in shorten_notes_b:
                 add_textbox(slide,x0,footer_y+Cm(0.8),cw,Cm(0.5),
-                            text=sn,
-                            font_size=Pt(9),bold=False,
+                            text=sn,font_size=Pt(9),bold=False,
                             color=RGBColor(0x85,0x64,0x04),
                             align=PP_ALIGN.LEFT)
                 footer_y += Cm(0.55)
@@ -602,6 +596,7 @@ def create_pptx(protocol_no, basic_data, drug_data,
     return output.getvalue()
 
 
+# ===== STEP1 =====
 st.subheader("STEP 1　レジメンPDFをアップロード")
 uploaded = st.file_uploader(
     "PDFファイルをここにドロップ",
@@ -638,6 +633,10 @@ if uploaded:
                     st.session_state["json_editor_sync"] = True
                     st.session_state.pop("registered", None)
                     st.session_state.pop("yonin_confirmed_1", None)
+                    # STEP3.5のキーもリセット
+                    for _k in list(st.session_state.keys()):
+                        if _k.startswith("step35_"):
+                            del st.session_state[_k]
                     st.success("✅ 解析完了！")
                 else:
                     st.error("JSONの抽出に失敗しました。もう一度試してください。")
@@ -675,7 +674,6 @@ if "extracted_parsed" in st.session_state:
         st.dataframe(pd.DataFrame(drug_list), use_container_width=True)
 
     with st.expander("🔧 JSONを直接編集する"):
-        # フォームで囲むことで text_area と button を同一送信にする
         with st.form(key="form_json_editor"):
             _edited = st.text_area(
                 "JSON",
@@ -694,12 +692,170 @@ if "extracted_parsed" in st.session_state:
                 st.session_state["extracted_parsed"] = _parsed_new
                 st.session_state.pop("yonin_confirmed_1", None)
                 st.session_state.pop("json_editor_text", None)
+                # STEP3.5のキーもリセット
+                for _k in list(st.session_state.keys()):
+                    if _k.startswith("step35_"):
+                        del st.session_state[_k]
                 st.success("✅ 反映しました！")
                 st.rerun()
             except json.JSONDecodeError as e:
                 st.error(f"JSONの形式が正しくありません: {e}")
 else:
     st.info("👆 STEP2で解析すると結果がここに表示されます")
+st.divider()
+
+# ===== STEP3.5: 要確認項目の解決 =====
+st.subheader("STEP 3.5　要確認項目の入力")
+
+if "extracted_parsed" in st.session_state and not st.session_state.get("registered"):
+    import re as _re35
+
+    def _parse_time_hours_35(text):
+        text = str(text).strip()
+        h = _re35.search(r"(\d+)\s*時間", text)
+        m = _re35.search(r"(\d+)\s*分",   text)
+        hours   = int(h.group(1)) if h else 0
+        minutes = int(m.group(1)) if m else 0
+        return hours + minutes / 60
+
+    _parsed35 = st.session_state["extracted_parsed"]
+    _drugs35  = _parsed35.get("drug_info") or _parsed35.get("drugs") or []
+    _basic35  = _parsed35.get("basic_info", {})
+
+    YONIN_DEF = [
+        ("admin_time_text",   "投与時間",    "例：30分・1時間・2時間"),
+        ("admin_day_text",    "投与Day",     "例：day1・day1,8,15"),
+        ("admin_day_numeric", "投与Day数値", "例：1・1|8|15"),
+        ("diluent_volume",    "希釈液容量",  "例：250"),
+        ("management_code",   "管理コード",  "例：AC001"),
+        ("dosage_value",      "投与量数値",  "例：100"),
+    ]
+    YONIN_BASIC = [
+        ("course_days", "1コース日数",    "例：21・28"),
+        ("protocol_no", "プロトコールNo", "例：C34-001"),
+    ]
+
+    _yonin_basic_items = []
+    for _k, _label, _placeholder in YONIN_BASIC:
+        _val = str(_basic35.get(_k, "")).strip()
+        if _val == "要確認":
+            _yonin_basic_items.append({
+                "key"        : f"step35_basic_{_k}",
+                "json_key"   : _k,
+                "label"      : f"基本情報 / {_label}",
+                "placeholder": _placeholder,
+            })
+
+    _yonin_drug_items = []
+    for _di, _d in enumerate(_drugs35):
+        _dname = str(
+            _d.get("product_name") or _d.get("brand_name") or
+            _d.get("management_code") or f"薬剤{_di+1}"
+        ).strip()
+        for _k, _label, _placeholder in YONIN_DEF:
+            _val = str(_d.get(_k, "") or "").strip()
+            if _val == "要確認":
+                _yonin_drug_items.append({
+                    "key"        : f"step35_drug_{_di}_{_k}",
+                    "drug_idx"   : _di,
+                    "drug_name"  : _dname,
+                    "json_key"   : _k,
+                    "label"      : f"{_dname} / {_label}",
+                    "placeholder": _placeholder,
+                })
+
+    _all_yonin = _yonin_basic_items + _yonin_drug_items
+
+    if not _all_yonin:
+        st.success("✅ 要確認項目はありません。STEP4へ進んでください。")
+    else:
+        st.warning(f"⚠️ {len(_all_yonin)} 件の要確認項目があります。入力してから登録してください。")
+        st.caption("未入力のままでも登録できますが、スプレッドシートに要確認が残ります。")
+
+        _all_filled = True
+        for _item in _all_yonin:
+            _inp = st.text_input(
+                _item["label"],
+                placeholder=_item["placeholder"],
+                key=_item["key"],
+            )
+            if not _inp.strip():
+                _all_filled = False
+
+        st.divider()
+        col_fix, col_skip = st.columns(2)
+
+        with col_fix:
+            if st.button(
+                "✅ 入力内容をJSONに反映してSTEP4へ",
+                type="primary",
+                use_container_width=True,
+                key="btn_step35_fix",
+                disabled=not _all_filled
+            ):
+                import copy
+                _parsed_new = copy.deepcopy(_parsed35)
+                _basic_new  = _parsed_new.get("basic_info", {})
+                _drugs_new  = (
+                    _parsed_new.get("drug_info") or
+                    _parsed_new.get("drugs") or []
+                )
+                for _item in _yonin_basic_items:
+                    _v = st.session_state.get(_item["key"], "").strip()
+                    if _v:
+                        _k = _item["json_key"]
+                        if _k == "course_days":
+                            try:
+                                _basic_new[_k] = int(_v)
+                            except:
+                                _basic_new[_k] = _v
+                        else:
+                            _basic_new[_k] = _v
+                for _item in _yonin_drug_items:
+                    _v = st.session_state.get(_item["key"], "").strip()
+                    if _v:
+                        _di = _item["drug_idx"]
+                        _k  = _item["json_key"]
+                        if _di < len(_drugs_new):
+                            if _k == "admin_time_text":
+                                _drugs_new[_di][_k] = _v
+                                _drugs_new[_di]["admin_time_numeric"] = round(
+                                    _parse_time_hours_35(_v), 4
+                                )
+                            elif _k == "diluent_volume":
+                                try:
+                                    _drugs_new[_di][_k] = float(_v)
+                                except:
+                                    _drugs_new[_di][_k] = _v
+                            else:
+                                _drugs_new[_di][_k] = _v
+
+                _parsed_new["basic_info"] = _basic_new
+                if "drug_info" in _parsed_new:
+                    _parsed_new["drug_info"] = _drugs_new
+                else:
+                    _parsed_new["drugs"] = _drugs_new
+
+                st.session_state["extracted_parsed"] = _parsed_new
+                st.session_state["extracted_json"]   = json.dumps(
+                    _parsed_new, ensure_ascii=False, indent=2
+                )
+                for _item in _all_yonin:
+                    st.session_state.pop(_item["key"], None)
+                st.success("✅ JSONに反映しました。STEP4で登録してください。")
+                st.rerun()
+
+        with col_skip:
+            if st.button(
+                "⏭️ このままSTEP4へ（要確認を残す）",
+                use_container_width=True,
+                key="btn_step35_skip"
+            ):
+                st.rerun()
+
+else:
+    if not st.session_state.get("registered"):
+        st.info("👆 STEP2で解析すると要確認項目が表示されます")
 st.divider()
 
 # ===== STEP4: 登録 =====
@@ -851,235 +1007,39 @@ else:
 
 st.divider()
 
-# ===== STEP5: 要確認項目チェック =====
+# ===== STEP5: パワポ生成 =====
 st.subheader("STEP 5　（外来化療）スケジュールシール パワポ生成")
 
 if st.session_state.get("registered"):
     protocol_no_reg = st.session_state.get("registered_protocol", "")
     st.info(f"📋 対象レジメン：{protocol_no_reg}")
 
-    # 要確認フィールド定義
-    # 要確認フィールド定義
-    # (JSONキー1, JSONキー2, 表示ラベル)
-    # ※ dosage_value は数値型なので要確認文字列にならない → 対象外
-    YONIN_FIELDS = [
-        ("admin_time_text",  "infusion_time_text", "投与時間"),
-        ("admin_day_text",   "day_text",            "投与Day"),
-        ("diluent_volume",   "diluent_volume",      "希釈液容量"),
-        ("management_code",  "management_code",     "管理コード"),
-    ]
-
-    # 登録済みのdrug_infoから要確認を抽出
-    _parsed    = st.session_state.get("extracted_parsed", {})
-    _drug_list = _parsed.get("drug_info") or _parsed.get("drugs") or []
-
-    _yoninins = []
-    for _d in _drug_list:
-        _name = str(
-            _d.get("product_name") or _d.get("brand_name") or
-            _d.get("management_code") or "不明"
-        ).strip()
-        for _k1, _k2, _label in YONIN_FIELDS:
-            _val = str(_d.get(_k1) or _d.get(_k2) or "").strip()
-            if _val == "要確認":
-                _key = f"yonin1_{protocol_no_reg}_{_d.get('management_code',_name)}_{_k1}"
-                _yoninins.append({
-                    "drug_name": _name,
-                    "k1"       : _k1,
-                    "k2"       : _k2,
-                    "label"    : _label,
-                    "key"      : _key,
-                })
-
-    # 要確認があれば確認UIを表示
-    if _yoninins and not st.session_state.get("yonin_confirmed_1", False):
-        st.divider()
-        st.warning(
-            f"⚠️ {len(_yoninins)} 件の「要確認」項目があります。"
-            "パワポ生成前に入力してください。"
-        )
-
-        # st.form を使わず通常のtext_input＋buttonで実装
-        # → form内のkey競合・送信タイミング問題を回避
-        _all_filled = True
-        for _item in _yoninins:
-            st.markdown(f"**{_item['drug_name']}　{_item['label']}**")
-            _input_val = st.text_input(
-                f"{_item['drug_name']}　{_item['label']} を入力",
-                key=_item["key"],
-                placeholder="例：2時間、d1 など",
-            )
-            if not _input_val.strip():
-                _all_filled = False
-
-        st.divider()
-        if not _all_filled:
-            st.warning("⚠️ すべての項目を入力してください")
-
-        if st.button(
-            "✅ 入力内容を確定する",
-            type="primary",
-            use_container_width=True,
-            key="btn_yonin_confirm",
-            disabled=not _all_filled
-        ):
-            # session_state から入力値を取得して drug_info に反映
-            import copy
-            _parsed_new    = copy.deepcopy(_parsed)
-            _drug_list_new = (
-                _parsed_new.get("drug_info") or
-                _parsed_new.get("drugs") or []
-            )
-            for _d in _drug_list_new:
-                _dname = str(
-                    _d.get("product_name") or _d.get("brand_name") or
-                    _d.get("management_code") or "不明"
-                ).strip()
-                for _item in _yoninins:
-                    if _item["drug_name"] == _dname:
-                        _val = st.session_state.get(_item["key"], "").strip()
-                        if _val:
-                            _d[_item["k1"]] = _val
-                            _d[_item["k2"]] = _val
-
-            st.session_state["extracted_parsed"]  = _parsed_new
-            st.session_state["yonin_confirmed_1"] = True
-            st.success("✅ 入力内容を確定しました！パワポを生成できます。")
-            st.rerun()
-
-    else:
-        # 要確認なし or 確定済み → パワポ生成ボタン表示
-        if st.session_state.get("yonin_confirmed_1", False):
-            st.success("✅ 要確認項目の入力が完了しています。")
-
-        st.divider()
-        if st.button("📑 パワポ（外来スケジュールシール）作成",
-                     type="primary", use_container_width=True):
-            with st.spinner("パワポ生成中..."):
-                try:
-                    import copy, re as _re
-
-                    sh          = get_spreadsheet()
-                    basic_data  = sh.worksheet("基本情報").get_all_records()
-                    master_data, notes_data = load_master_data()
-                    drug_data_ss = sh.worksheet("薬剤情報").get_all_records()
-
-                    _parsed_now    = st.session_state.get("extracted_parsed", {})
-                    _drug_list_now = (
-                        _parsed_now.get("drug_info") or
-                        _parsed_now.get("drugs") or []
-                    )
-
-                    # ── 投与時間テキスト→時間数値 変換 ──────────────
-                    def _parse_time_hours(text):
-                        """
-                        "1時間" → 1.0 / "30分" → 0.5
-                        "1時間30分" → 1.5 / "90分" → 1.5
-                        """
-                        text = str(text).strip()
-                        h = _re.search(r'(\d+)\s*時間', text)
-                        m = _re.search(r'(\d+)\s*分',   text)
-                        hours   = int(h.group(1)) if h else 0
-                        minutes = int(m.group(1)) if m else 0
-                        return hours + minutes / 60
-
-                    # ── 商品名→修正値 の対応辞書を作成 ───────────────
-                    _patch_map = {}
-                    for _d in _drug_list_now:
-                        _pname = str(
-                            _d.get("product_name") or _d.get("brand_name") or ""
-                        ).strip()
-                        for _k1, _k2, _label in YONIN_FIELDS:
-                            _v = str(_d.get(_k1) or _d.get(_k2) or "").strip()
-                            if _v and _v != "要確認":
-                                _patch_map[(_pname, _label)] = _v
-
-                    # ── drug_data_ss に反映（パワポ用） ───────────────
-                    _drug_data_use = copy.deepcopy(drug_data_ss)
-                    for _dd in _drug_data_use:
-                        if str(_dd.get("プロトコールNo","")).strip() != protocol_no_reg:
-                            continue
-                        _dname = str(_dd.get("商品名","")).strip()
-
-                        _t = _patch_map.get((_dname, "投与時間"))
-                        if _t:
-                            _dd["投与時間文字"]  = _t
-                            # 数値も更新（所要時間計算に使用）
-                            _dd["投与時間数値"] = _parse_time_hours(_t)
-
-                        _day = _patch_map.get((_dname, "投与Day"))
-                        if _day:
-                            _dd["投与Day文字"] = _day
-
-                        _dil = _patch_map.get((_dname, "希釈液容量"))
-                        if _dil:
-                            try:
-                                _dd["希釈液容量"] = float(_dil)
-                            except:
-                                _dd["希釈液容量"] = _dil
-
-                    # ── スプレッドシートに書き戻し ────────────────────
-                    if st.session_state.get("yonin_confirmed_1", False):
-                        try:
-                            import time as _time
-                            ws_drug_wb = sh.worksheet("薬剤情報")
-                            _all_vals  = ws_drug_wb.get_all_values()
-                            _headers   = _all_vals[0]
-
-                            # 列インデックスを取得
-                            def _col_idx(name):
-                                return _headers.index(name) + 1 if name in _headers else None
-
-                            _col_time_text = _col_idx("投与時間文字")
-                            _col_time_num  = _col_idx("投与時間数値")
-                            _col_day_text  = _col_idx("投与Day文字")
-
-                            for _row_i, _row in enumerate(_all_vals[1:], start=2):
-                                if not _row:
-                                    continue
-                                _pno = _row[0].strip() if len(_row) > 0 else ""
-                                if _pno != protocol_no_reg:
-                                    continue
-                                _dname_ss = _row[3].strip() if len(_row) > 3 else ""
-
-                                _t = _patch_map.get((_dname_ss, "投与時間"))
-                                if _t and _col_time_text:
-                                    ws_drug_wb.update_cell(_row_i, _col_time_text, _t)
-                                    if _col_time_num:
-                                        ws_drug_wb.update_cell(
-                                            _row_i, _col_time_num,
-                                            _parse_time_hours(_t)
-                                        )
-                                    _time.sleep(0.5)  # API制限対策
-
-                                _day = _patch_map.get((_dname_ss, "投与Day"))
-                                if _day and _col_day_text:
-                                    ws_drug_wb.update_cell(_row_i, _col_day_text, _day)
-                                    _time.sleep(0.5)
-
-                            st.success("✅ スプレッドシートの要確認項目を更新しました")
-                        except Exception as _wb_e:
-                            st.warning(f"⚠️ スプレッドシート書き戻しエラー: {_wb_e}")
-
-                    pptx_data = create_pptx(
-                        protocol_no_reg, basic_data,
-                        _drug_data_use, master_data, notes_data
-                    )
-                except Exception as e:
-                    st.error(f"データ取得エラー: {e}")
-                    pptx_data = None
-
-            if pptx_data:
-                st.download_button(
-                    label="⬇️ パワポをダウンロード",
-                    data=pptx_data,
-                    file_name=f"{protocol_no_reg}_スケジュールシール_AI作成要チェック_{today_str}.pptx",
-                    mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
-                    use_container_width=True
+    if st.button("📑 パワポ（外来スケジュールシール）作成",
+                 type="primary", use_container_width=True):
+        with st.spinner("パワポ生成中..."):
+            try:
+                sh          = get_spreadsheet()
+                basic_data  = sh.worksheet("基本情報").get_all_records()
+                drug_data   = sh.worksheet("薬剤情報").get_all_records()
+                master_data, notes_data = load_master_data()
+                pptx_data   = create_pptx(
+                    protocol_no_reg, basic_data, drug_data, master_data, notes_data
                 )
-                st.success("✅ パワポ生成完了！")
-            else:
-                st.error("❌ 生成に失敗しました")
+            except Exception as e:
+                st.error(f"データ取得エラー: {e}")
+                pptx_data = None
+
+        if pptx_data:
+            st.download_button(
+                label="⬇️ パワポをダウンロード",
+                data=pptx_data,
+                file_name=f"{protocol_no_reg}_スケジュールシール_AI作成要チェック_{today_str}.pptx",
+                mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                use_container_width=True
+            )
+            st.success("✅ パワポ生成完了！")
+        else:
+            st.error("❌ 生成に失敗しました")
 
     st.divider()
     st.info("続けてどうしますか？")
@@ -1110,9 +1070,8 @@ if st.session_state.get("registered"):
             "json_editor_text", "json_editor_sync",
         ]:
             st.session_state.pop(key, None)
-        # 要確認入力値もクリア
         for key in list(st.session_state.keys()):
-            if key.startswith("yonin1_"):
+            if key.startswith("step35_") or key.startswith("yonin1_"):
                 del st.session_state[key]
         st.rerun()
 else:
