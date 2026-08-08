@@ -2597,7 +2597,106 @@ if selected_basic and result:
     ]
 
     _drug_rows = {}
-    for _i, _d in enumerate(_cancer_drugs[:10]):
+    _seen_codes = set()
+    _drug_row_counter = [_R_DRUG_TOP]
+
+    for _d in _cancer_drugs:
+        _code  = str(_d.get("管理コード",""))
+        if _code in _seen_codes:
+            continue
+        _seen_codes.add(_code)
+
+        _r    = _drug_row_counter[0]
+        _drug_row_counter[0] += 1
+
+        _m     = _mdict.get(_code, {})
+        _name  = str(_m.get("一般名（全角）","") or _d.get("商品名","") or _code)
+        _dbase = str(_d.get("用量根拠",""))
+        try:
+            _rv = str(_d.get("投与量数値","") or "").strip()
+            _rv = "".join(c for c in _rv if c.isdigit() or c == ".")
+            _dnum = float(_rv or 0)
+        except:
+            _dnum = 0
+        _dn = int(_dnum) if _dnum == int(_dnum) else _dnum
+
+        if _dbase == "BSA依存":
+            _formula   = f"=B{_R_BSA}*{_dnum}"
+            _name_disp = f"{_name}({_dn}mg/m²)"
+        elif _dbase == "AUC依存":
+            _formula   = f"=(B{_R_CCR}+25)*{_dnum}"
+            _name_disp = f"{_name}(AUC{_dn})"
+        elif _dbase == "BW依存":
+            _formula   = f"=B{_R_BW}*{_dnum}"
+            _name_disp = f"{_name}({_dn}mg/kg)"
+        elif _dbase == "固定用量":
+            _formula   = f"{_dn}mg"
+            _name_disp = _name
+        else:
+            _formula   = "要確認"
+            _name_disp = _name
+
+        if _dbase == "固定用量":
+            _param_lines.append(f"{_name_disp}\t{_formula}\t{_formula}\t100%")
+        else:
+            _drug_rows[_code] = _r
+            _pct = f'=IF(C{_r}="","",TEXT(C{_r}/B{_r}*100,"0.0")&"%")'
+            _param_lines.append(f"{_name_disp}\t{_formula}\t\t{_pct}")
+
+    for _i in range(len(_seen_codes), 10):
+        _param_lines.append("\t\t\t")
+
+    _param_tsv = "\n".join(_param_lines)
+
+    _drug_rows = {}
+    _seen_codes = set()
+    _drug_row_counter = [_R_DRUG_TOP]
+
+    for _d in _cancer_drugs:
+        _code  = str(_d.get("管理コード",""))
+        if _code in _seen_codes:
+            continue
+        _seen_codes.add(_code)
+
+        _r    = _drug_row_counter[0]
+        _drug_row_counter[0] += 1
+
+        _m     = _mdict.get(_code, {})
+        _name  = str(_m.get("一般名（全角）","") or _d.get("商品名","") or _code)
+        _dbase = str(_d.get("用量根拠",""))
+        try:
+            _rv = str(_d.get("投与量数値","") or "").strip()
+            _rv = "".join(c for c in _rv if c.isdigit() or c == ".")
+            _dnum = float(_rv or 0)
+        except:
+            _dnum = 0
+        _dn = int(_dnum) if _dnum == int(_dnum) else _dnum
+
+        if _dbase == "BSA依存":
+            _formula   = f"=B{_R_BSA}*{_dnum}"
+            _name_disp = f"{_name}({_dn}mg/m²)"
+        elif _dbase == "AUC依存":
+            _formula   = f"=(B{_R_CCR}+25)*{_dnum}"
+            _name_disp = f"{_name}(AUC{_dn})"
+        elif _dbase == "BW依存":
+            _formula   = f"=B{_R_BW}*{_dnum}"
+            _name_disp = f"{_name}({_dn}mg/kg)"
+        elif _dbase == "固定用量":
+            _formula   = f"{_dn}mg"
+            _name_disp = _name
+        else:
+            _formula   = "要確認"
+            _name_disp = _name
+
+        if _dbase == "固定用量":
+            _param_lines.append(f"{_name_disp}\t{_formula}\t{_formula}\t100%")
+        else:
+            _drug_rows[_code] = _r
+            _pct = f'=IF(C{_r}="","",TEXT(C{_r}/B{_r}*100,"0.0")&"%")'
+            _param_lines.append(f"{_name_disp}\t{_formula}\t\t{_pct}")
+
+    for _i in range(len(_seen_codes), 10):
+        _param_lines.append("\t\t\t")
         _r     = _R_DRUG_TOP + _i
         _code  = str(_d.get("管理コード",""))
         _m     = _mdict.get(_code, {})
