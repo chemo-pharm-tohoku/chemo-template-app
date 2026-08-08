@@ -2574,11 +2574,11 @@ if selected_basic and result:
     _param_lines = [
         "【パラメーター入力】\t\t\t",
         "【患者情報】\t\t\t",
-        f"体重(kg)\t\t{_mark(_need_bw)}",
-        f"BSA(m²)\t\t{_mark(_need_bsa)}",
-        f"SCr\t\t{_mark(_need_ccr)}",
-        f"年齢\t\t{_mark(_need_ccr)}",
-        "性別係数\t\t" + (_mark(_need_ccr) + "\t← 1（男）または 0.85（女）を入力" if _need_ccr else _mark(_need_ccr)),
+        f"体重(kg)\t\t{'←入力' if _need_bw else _mark(_need_bw)}",
+        f"BSA(m²)\t\t{'←入力' if _need_bsa else _mark(_need_bsa)}",
+        f"SCr\t\t{'←入力' if _need_ccr else _mark(_need_ccr)}",
+        f"年齢\t\t{'←入力' if _need_ccr else _mark(_need_ccr)}",
+        "性別係数\t\t" + ("←入力\t1（男）または 0.85（女）" if _need_ccr else _mark(_need_ccr)),
     ]
 
     if _need_ccr:
@@ -2588,11 +2588,12 @@ if selected_basic and result:
         _param_lines.append("Ccr(mL/min)\t\t×入力不要")
 
     _param_lines += [
-        f"開始日\t← YYYY/M/D形式で入力\t",
-        f"コース目\t← 数値を入力\t",
+        f"開始日\t\t←入力（YYYY/M/D形式）",
+        f"コース目\t\t←入力（数値）",
         "",
         "【投与量】\t\t\t",
-        "薬剤名\t理論値\t投与量(mg)\t%",
+        f"\t\t↓入力\t",
+        "薬剤名\t理論値\t処方量(mg)\t%",
     ]
 
     _drug_rows = {}
@@ -2627,7 +2628,10 @@ if selected_basic and result:
             _formula   = "要確認"
             _name_disp = _name
 
-        _pct = f'=IF(C{_r}="","",TEXT(C{_r}/B{_r}*100,"0.0")&"%")'
+        if _dbase == "固定用量":
+            _pct = "100%"
+        else:
+            _pct = f'=IF(C{_r}="","",TEXT(C{_r}/B{_r}*100,"0.0")&"%")'
         _param_lines.append(f"{_name_disp}\t{_formula}\t\t{_pct}")
 
     for _i in range(len(_cancer_drugs), 10):
@@ -2642,7 +2646,7 @@ if selected_basic and result:
     _o_lines = [
         "【O欄・Pd欄】\t\t\t\t\t\t",
         f"●化学療法：【{protocol_no}】{_regimen_name}（1コース{_course_days}日）\t\t\t\t\t\t",
-        f"=B{_R_COURSE}\tコース目\t開始日\t=B{_R_START}",
+        f"=B{_R_COURSE}\tコース目\t開始日\t=TEXT(B{_R_START},\"YYYY/M/D\")",
     ]
 
     for _d in _cancer_drugs:
@@ -2671,9 +2675,8 @@ if selected_basic and result:
         else:
             _pct2 = f'=IF(C{_dr}="","",TEXT(C{_dr}/B{_dr}*100,"0.0")&"%")'
             _o_lines.append(
-                f"{_nd}\t理論値：\t=B{_dr}\t処方量：\t=C{_dr}\t{_pct2}\t({_day})"
+                f"{_nd}\t理論値(mg)：\t=B{_dr}\t処方量(mg)：\t=C{_dr}\t{_pct2}\t({_day})"
             )
-
     _inj_parts = []
     for _d in _support_inj:
         _code = str(_d.get("管理コード",""))
@@ -2814,7 +2817,7 @@ if selected_basic and result:
         if _dbase == "固定用量" or not _dr:
             _seal_lines.append(f"{_nd2}\t\t\t({_day})")
         else:
-            _seal_lines.append(f"{_nd2}\t処方量：\t=C{_dr}\t({_day})")
+             _seal_lines.append(f"{_nd2}\t処方量(mg)：\t=C{_dr}\t({_day})")
 
     if _support_inj or _support_oral:
         _seal_lines += ["", "＜支持療法＞\t\t\t"]
