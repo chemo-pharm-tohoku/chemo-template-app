@@ -2565,7 +2565,7 @@ if selected_basic and result:
     _R_CCR      = 8
     _R_START    = 9
     _R_COURSE   = 10
-    _R_DRUG_TOP = 14
+    _R_DRUG_TOP = 15
 
     def _mark(needed):
         return "" if needed else "×入力不要"
