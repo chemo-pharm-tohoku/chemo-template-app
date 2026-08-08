@@ -2660,8 +2660,12 @@ if selected_basic and result:
         f"=B{_R_COURSE}\tコース目\t開始日\t=TEXT(B{_R_START},\"YYYY/M/D\")",
     ]
 
+    _seen_o = set()
     for _d in _cancer_drugs:
         _code   = str(_d.get("管理コード",""))
+        if _code in _seen_o:
+            continue
+        _seen_o.add(_code)
         _m      = _mdict.get(_code, {})
         _name_h = to_half_kana(str(_m.get("一般名（全角）","") or _d.get("商品名","") or _code))
         _dbase  = str(_d.get("用量根拠",""))
@@ -2807,8 +2811,12 @@ if selected_basic and result:
         "＜抗がん薬＞\t\t\t",
     ]
 
+    _seen_seal = set()
     for _d in _cancer_drugs:
         _code  = str(_d.get("管理コード",""))
+        if _code in _seen_seal:
+            continue
+        _seen_seal.add(_code)
         _m     = _mdict.get(_code, {})
         _nf    = str(_m.get("採用商品名（全角）","") or _d.get("商品名","") or _code)
         _dbase = str(_d.get("用量根拠",""))
