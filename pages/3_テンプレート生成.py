@@ -2839,16 +2839,18 @@ if selected_basic and result:
                .replace("\\", "\\\\")
                .replace("`", "\\`")
                .replace("\n", "\\n")
-               .replace("\r", "\\r"))
-        _components.html(
-            f'<button onclick="navigator.clipboard.writeText(`{_js}`)'
-            f'.then(()=>{{this.innerText=\'✅ コピー済み\';'
-            f'setTimeout(()=>{{this.innerText=\'{label}\'}},2000)}})"'
-            f' style="background:{color};color:white;border:none;padding:10px 20px;'
-            f'border-radius:6px;cursor:pointer;width:100%;font-size:15px;">'
-            f'{label}</button>',
-            height=50
+               .replace("\r", "\\r")
+               .replace('"', "&quot;")
+               .replace("'", "&#39;"))
+        _html = (
+            '<button onclick="navigator.clipboard.writeText(`' + _js + '`)'
+            '.then(()=>{this.innerText=\'✅ コピー済み\';'
+            'setTimeout(()=>{this.innerText=\'' + label + '\'},2000)})"'
+            ' style="background:' + color + ';color:white;border:none;padding:10px 20px;'
+            'border-radius:6px;cursor:pointer;width:100%;font-size:15px;">'
+            + label + '</button>'
         )
+        _components.html(_html, height=50)
 
     # ── 表示 ──
     st.markdown("**① A1セルから貼り付け：パラメータ入力欄（A〜D列）**")
