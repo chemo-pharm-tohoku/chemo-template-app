@@ -2529,9 +2529,213 @@ if selected_basic:
         pass
 
 st.divider()
+st.subheader("📊 Excel貼り付け用テンプレート生成")
+st.caption("まっさらなExcelシートに貼り付けてご使用ください")
+
+if selected_basic and result:
+    import streamlit.components.v1 as _components
+
+    _basic   = result["basic"]
+    _drugs   = result["drugs"]
+    _mdict   = result["master_dict"]
+
+    _cancer_drugs = [d for d in _drugs if str(d.get("①O欄_抗がん剤",""))=="○"]
+    _support_inj  = sorted(
+        [d for d in _drugs
+         if str(d.get("①O欄_支持療法",""))=="○"
+         and str(d.get("投与順序",""))!="内服"],
+        key=lambda d: INJECTION_ORDER.get(str(d.get("支持療法分類","")),99)
+    )
+    _support_oral = [d for d in _drugs
+                     if str(d.get("①O欄_支持療法",""))=="○"
+                     and str(d.get("投与順序",""))=="内服"]
+
+    _need_bsa = any(str(d.get("用量根拠",""))=="BSA依存"             for d in _cancer_drugs)
+    _need_ccr = any(str(d.get("用量根拠",""))=="AUC依存"             for d in _cancer_drugs)
+    _need_bw  = any(str(d.get("用量根拠","")) in ("BW依存","AUC依存") for d in _cancer_drugs)
+
+    # ── 行番号カウンタ ──
+    _row = [2]
+    def _nrow():
+        r = _row[0]; _row[0] += 1; return r
+
+    # ── パラメータ入力欄 TSV ──
+    _param_lines = []
+    _param_lines.append("項目\t値\t備考")
+
+    _r_bw = _r_bsa = _r_age = _r_scr = _r_sex = _r_ccr = None
+
+    if _need_bw or _need_bsa or _need_ccr:
+        if _need_bw:
+            _r_bw = _nrow()
+            _param_lines.append(f"体重(kg)\t\t← B{_r_bw}セルに数値を入力")
+        if _need_bsa:
+            _r_bsa = _nrow()
+            _param_lines.append(f"BSA(m²)\t\t← B{_r_bsa}セルに数値を入力")
+        if _need_ccr:
+            _r_age = _nrow()
+            _param_lines.append(f"年齢\t\t← B{_r_age}セルに数値を入力")
+            _r_scr = _nrow()
+            _param_lines.append(f"SCr\t\t← B{_r_scr}セルに数値を入力")
+            _r_sex = _nrow()
+            _param_lines.append(f"性別係数\t\t← B{_r_sex}セルに 1（男）または 0.85（女）を入力")
+            _r_ccr = _nrow()
+            _bw_ref = _r_bw if _r_bw else _r_age
+            _param_lines.append(
+                f"Ccr(mL/min)\t=(140-B{_r_age})*B{_bw_ref}/(72*B{_r_scr})*B{_r_sex}\t"
+                f"← B{_r_ccr}セルにこの数式を入力"
+            )
+
+    _param_lines.append("")
+    _param_lines.append("--- 処方量入力 ---\t\t")
+    _param_lines.append("薬剤名\t計算値（数式）\t処方量(mg)")
+
+    _drug_rows = {}
+    for _d in _cancer_drugs:
+        _code  = str(_d.get("管理コード",""))
+        _m     = _mdict.get(_code, {})
+        _name  = str(_m.get("一般名（全角）","") or _d.get("商品名","") or _code)
+        _dbase = str(_d.get("用量根拠",""))
+        try:
+            _rv = str(_d.get("投与量数値","") or "").strip()
+            _rv = "".join(c for c in _rv if c.isdigit() or c == ".")
+            _dnum = float(_rv or 0)
+        except:
+            _dnum = 0
+        _r = _nrow()
+        _drug_rows[_code] = _r
+
+        if _dbase == "BSA依存" and _r_bsa:
+            _dn = int(_dnum) if _dnum == int(_dnum) else _dnum
+            _param_lines.append(
+                f"{_name}({_dn}mg/m²)\t=B{_r_bsa}*{_dnum}（← C{_r}セルに入力）\t"
+                f"← D{_r}セルに処方量を入力"
+            )
+        elif _dbase == "AUC依存" and _r_ccr:
+            _dn = int(_dnum) if _dnum == int(_dnum) else _dnum
+            _param_lines.append(
+                f"{_name}(AUC{_dn})\t=(B{_r_ccr}+25)*{_dnum}（← C{_r}セルに入力）\t"
+                f"← D{_r}セルに処方量を入力"
+            )
+        elif _dbase == "BW依存" and _r_bw:
+            _dn = int(_dnum) if _dnum == int(_dnum) else _dnum
+            _param_lines.append(
+                f"{_name}({_dn}mg/kg)\t=B{_r_bw}*{_dnum}（← C{_r}セルに入力）\t"
+                f"← D{_r}セルに処方量を入力"
+            )
+        elif _dbase == "固定用量":
+            _ds = str(int(_dnum)) if _dnum == int(_dnum) else str(_dnum)
+            _param_lines.append(f"{_name}\t{_ds}mg（固定）\t")
+        else:
+            _param_lines.append(f"{_name}\t要確認\t← D{_r}セルに処方量を入力")
+
+    _param_tsv = "\n".join(_param_lines)
+
+    # ── 投与量シール TSV ──
+    _seal_lines = []
+    _seal_lines.append(
+        f"●化学療法：【{protocol_no}】{_basic.get('レジメン名','')}（1コース{_basic.get('1コース日数','')}日）"
+    )
+    _seal_lines.append("コース目\t開始日\t")
+    _seal_lines.append("")
+    _seal_lines.append("＜抗がん薬＞\t\t")
+
+    for _d in _cancer_drugs:
+        _code  = str(_d.get("管理コード",""))
+        _m     = _mdict.get(_code, {})
+        _name  = str(_m.get("採用商品名（全角）","") or _d.get("商品名","") or _code)
+        _dbase = str(_d.get("用量根拠",""))
+        _day   = str(_d.get("投与Day文字",""))
+        try:
+            _rv = str(_d.get("投与量数値","") or "").strip()
+            _rv = "".join(c for c in _rv if c.isdigit() or c == ".")
+            _dnum = float(_rv or 0)
+        except:
+            _dnum = 0
+        _dn = int(_dnum) if _dnum == int(_dnum) else _dnum
+        _dr = _drug_rows.get(_code, "")
+
+        if _dbase == "固定用量":
+            _dose_str = f"投与量：{_dn}mg"
+        elif _dbase == "BSA依存":
+            _dose_str = f"{_dn}mg/m²　処方量：（D{_dr}セル参照）"
+        elif _dbase == "AUC依存":
+            _dose_str = f"AUC：{_dn}　処方量：（D{_dr}セル参照）"
+        elif _dbase == "BW依存":
+            _dose_str = f"{_dn}mg/kg　処方量：（D{_dr}セル参照）"
+        else:
+            _dose_str = "要確認"
+
+        _seal_lines.append(f"{_name}\t{_dose_str}\t({_day})")
+
+    if _support_inj or _support_oral:
+        _seal_lines.append("")
+        _seal_lines.append("＜支持療法＞\t\t")
+        for _d in _support_inj:
+            _code  = str(_d.get("管理コード",""))
+            _m     = _mdict.get(_code, {})
+            _name_h = str(_m.get("一般名（半角カナ）","") or _m.get("採用商品名（全角）","") or _d.get("商品名",""))
+            _ds, _us = format_dose_text(_d)
+            _day = str(_d.get("投与Day文字",""))
+            _seal_lines.append(f"{_name_h} {_ds}{_us}\t\t({_day})")
+        for _d in _support_oral:
+            _code  = str(_d.get("管理コード",""))
+            _m     = _mdict.get(_code, {})
+            _name_h = str(_m.get("一般名（半角カナ）","") or _m.get("採用商品名（全角）","") or _d.get("商品名",""))
+            _ds, _us = format_dose_text(_d)
+            _day = str(_d.get("投与Day文字",""))
+            _seal_lines.append(f"{_name_h} {_ds}{_us}\t\t({_day})")
+
+    _seal_tsv = "\n".join(_seal_lines)
+
+    # ── 表示 ──
+    st.markdown("**① A1セルから貼り付け：パラメータ入力欄＋処方量入力**")
+    st.text_area(
+        "パラメータ入力欄（A1セルから貼り付け）",
+        value=_param_tsv,
+        height=300,
+        key="tsv_param"
+    )
+    _param_tsv_js = _param_tsv.replace("\\", "\\\\").replace("`", "\\`").replace("\n", "\\n").replace("\r", "\\r")
+    _components.html(
+        f'<button onclick="navigator.clipboard.writeText(`{_param_tsv_js}`)'
+        f'.then(()=>{{this.innerText=\'✅ コピー済み\';'
+        f'setTimeout(()=>{{this.innerText=\'📋 パラメータ欄をコピー\'}},2000)}})"'
+        f' style="background:#1976D2;color:white;border:none;padding:10px 20px;'
+        f'border-radius:6px;cursor:pointer;width:100%;font-size:15px;">'
+        f'📋 パラメータ欄をコピー</button>',
+        height=50
+    )
+
+    _seal_row_start = len(_param_lines) + 5
+    st.markdown(f"**② A{_seal_row_start}セル（目安）から貼り付け：投与量シール**")
+    st.text_area(
+        "投与量シール（A列から貼り付け）",
+        value=_seal_tsv,
+        height=200,
+        key="tsv_seal"
+    )
+    _seal_tsv_js = _seal_tsv.replace("\\", "\\\\").replace("`", "\\`").replace("\n", "\\n").replace("\r", "\\r")
+    _components.html(
+        f'<button onclick="navigator.clipboard.writeText(`{_seal_tsv_js}`)'
+        f'.then(()=>{{this.innerText=\'✅ コピー済み\';'
+        f'setTimeout(()=>{{this.innerText=\'📋 投与量シールをコピー\'}},2000)}})"'
+        f' style="background:#388E3C;color:white;border:none;padding:10px 20px;'
+        f'border-radius:6px;cursor:pointer;width:100%;font-size:15px;">'
+        f'📋 投与量シールをコピー</button>',
+        height=50
+    )
+
+    st.info("💡 O欄・Pd欄テキストは下の「テキスト生成」ページで生成してコピーしてください")
+
+else:
+    st.info("👆 レジメンを選択するとテンプレートが表示されます")
+
+st.divider()
 st.subheader("📋 テキスト生成")
+st.caption("患者パラメータを入力してO欄・Pd欄テキストを生成します")
 if st.button(
-    "📋 O欄・Pd欄 テキスト生成",
+    "📋 O欄・Pd欄 テキスト生成ページへ",
     type="primary",
     use_container_width=True,
     key="btn_go_text_gen"
@@ -2540,7 +2744,6 @@ if st.button(
 
 st.divider()
 st.subheader("📁 ファイル生成")
-
 col_excel, col_pptx = st.columns(2)
 
 with col_excel:
