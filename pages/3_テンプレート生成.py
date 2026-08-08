@@ -2637,6 +2637,8 @@ if selected_basic and result:
             _name_disp = _name
 
         if _dbase == "固定用量":
+            # 固定用量：行は使うがdrug_rowsには登録しない
+            _drug_rows[_code] = _r  # O欄参照用に登録するが処方量入力なし
             _param_lines.append(f"{_name_disp}\t{_formula}\t{_formula}\t100%")
         else:
             _drug_rows[_code] = _r
