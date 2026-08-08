@@ -2556,44 +2556,48 @@ if selected_basic and result:
     _need_ccr = any(str(d.get("用量根拠",""))=="AUC依存"             for d in _cancer_drugs)
     _need_bw  = any(str(d.get("用量根拠","")) in ("BW依存","AUC依存") for d in _cancer_drugs)
 
-    # ── 行番号カウンタ ──
-    _row = [2]
-    def _nrow():
-        r = _row[0]; _row[0] += 1; return r
+    # ── 固定行番号定義 ──
+    _R_BW       = 3
+    _R_BSA      = 4
+    _R_SCR      = 5
+    _R_AGE      = 6
+    _R_SEX      = 7
+    _R_CCR      = 8
+    _R_START    = 9
+    _R_COURSE   = 10
+    _R_DRUG_TOP = 14
 
-    # ── パラメータ入力欄 TSV ──
-    _param_lines = []
-    _param_lines.append("項目\t値\t備考")
+    def _mark(needed):
+        return "" if needed else "×"
 
-    _r_bw = _r_bsa = _r_age = _r_scr = _r_sex = _r_ccr = None
+    # ── A列：パラメータ入力欄 TSV ──
+    _param_lines = [
+        "【パラメーター入力】\t\t\t",
+        "【患者情報】\t\t\t",
+        f"体重(kg)\t\t{_mark(_need_bw)}",
+        f"BSA(m²)\t\t{_mark(_need_bsa)}",
+        f"SCr\t\t{_mark(_need_ccr)}",
+        f"年齢\t\t{_mark(_need_ccr)}",
+        "性別係数\t\t" + (_mark(_need_ccr) + "\t← 1（男）または 0.85（女）を入力" if _need_ccr else _mark(_need_ccr)),
+    ]
 
-    if _need_bw or _need_bsa or _need_ccr:
-        if _need_bw:
-            _r_bw = _nrow()
-            _param_lines.append(f"体重(kg)\t\t← B{_r_bw}セルに数値を入力")
-        if _need_bsa:
-            _r_bsa = _nrow()
-            _param_lines.append(f"BSA(m²)\t\t← B{_r_bsa}セルに数値を入力")
-        if _need_ccr:
-            _r_age = _nrow()
-            _param_lines.append(f"年齢\t\t← B{_r_age}セルに数値を入力")
-            _r_scr = _nrow()
-            _param_lines.append(f"SCr\t\t← B{_r_scr}セルに数値を入力")
-            _r_sex = _nrow()
-            _param_lines.append(f"性別係数\t\t← B{_r_sex}セルに 1（男）または 0.85（女）を入力")
-            _r_ccr = _nrow()
-            _bw_ref = _r_bw if _r_bw else _r_age
-            _param_lines.append(
-                f"Ccr(mL/min)\t=(140-B{_r_age})*B{_bw_ref}/(72*B{_r_scr})*B{_r_sex}\t"
-                f"← B{_r_ccr}セルにこの数式を入力"
-            )
+    if _need_ccr:
+        _ccr_f = f"=(140-B{_R_AGE})*B{_R_BW}/(72*B{_R_SCR})*B{_R_SEX}"
+        _param_lines.append(f"Ccr(mL/min)\t{_ccr_f}\t（自動計算）")
+    else:
+        _param_lines.append("Ccr(mL/min)\t\t×")
 
-    _param_lines.append("")
-    _param_lines.append("--- 処方量入力 ---\t\t")
-    _param_lines.append("薬剤名\t計算値（数式）\t処方量(mg)")
+    _param_lines += [
+        f"開始日\t\t\t← YYYY/M/D形式で入力",
+        f"コース目\t\t\t← 数値を入力",
+        "",
+        "【投与量】\t\t\t",
+        "薬剤名\t理論値\t投与量(mg)\t%",
+    ]
 
     _drug_rows = {}
-    for _d in _cancer_drugs:
+    for _i, _d in enumerate(_cancer_drugs[:10]):
+        _r     = _R_DRUG_TOP + _i
         _code  = str(_d.get("管理コード",""))
         _m     = _mdict.get(_code, {})
         _name  = str(_m.get("一般名（全角）","") or _d.get("商品名","") or _code)
@@ -2604,48 +2608,106 @@ if selected_basic and result:
             _dnum = float(_rv or 0)
         except:
             _dnum = 0
-        _r = _nrow()
+        _dn = int(_dnum) if _dnum == int(_dnum) else _dnum
         _drug_rows[_code] = _r
 
-        if _dbase == "BSA依存" and _r_bsa:
-            _dn = int(_dnum) if _dnum == int(_dnum) else _dnum
-            _param_lines.append(
-                f"{_name}({_dn}mg/m²)\t=B{_r_bsa}*{_dnum}（← C{_r}セルに入力）\t"
-                f"← D{_r}セルに処方量を入力"
-            )
-        elif _dbase == "AUC依存" and _r_ccr:
-            _dn = int(_dnum) if _dnum == int(_dnum) else _dnum
-            _param_lines.append(
-                f"{_name}(AUC{_dn})\t=(B{_r_ccr}+25)*{_dnum}（← C{_r}セルに入力）\t"
-                f"← D{_r}セルに処方量を入力"
-            )
-        elif _dbase == "BW依存" and _r_bw:
-            _dn = int(_dnum) if _dnum == int(_dnum) else _dnum
-            _param_lines.append(
-                f"{_name}({_dn}mg/kg)\t=B{_r_bw}*{_dnum}（← C{_r}セルに入力）\t"
-                f"← D{_r}セルに処方量を入力"
-            )
+        if _dbase == "BSA依存":
+            _formula   = f"=B{_R_BSA}*{_dnum}"
+            _name_disp = f"{_name}({_dn}mg/m²)"
+        elif _dbase == "AUC依存":
+            _formula   = f"=(B{_R_CCR}+25)*{_dnum}"
+            _name_disp = f"{_name}(AUC{_dn})"
+        elif _dbase == "BW依存":
+            _formula   = f"=B{_R_BW}*{_dnum}"
+            _name_disp = f"{_name}({_dn}mg/kg)"
         elif _dbase == "固定用量":
-            _ds = str(int(_dnum)) if _dnum == int(_dnum) else str(_dnum)
-            _param_lines.append(f"{_name}\t{_ds}mg（固定）\t")
+            _formula   = f"{_dn}mg"
+            _name_disp = _name
         else:
-            _param_lines.append(f"{_name}\t要確認\t← D{_r}セルに処方量を入力")
+            _formula   = "要確認"
+            _name_disp = _name
+
+        _pct = f'=IF(C{_r}="","",TEXT(C{_r}/B{_r}*100,"0.0")&"%")'
+        _param_lines.append(f"{_name_disp}\t{_formula}\t\t{_pct}")
+
+    for _i in range(len(_cancer_drugs), 10):
+        _param_lines.append("\t\t\t")
 
     _param_tsv = "\n".join(_param_lines)
 
-    # ── 投与量シール TSV ──
-    _seal_lines = []
-    _seal_lines.append(
-        f"●化学療法：【{protocol_no}】{_basic.get('レジメン名','')}（1コース{_basic.get('1コース日数','')}日）"
-    )
-    _seal_lines.append("コース目\t開始日\t")
-    _seal_lines.append("")
-    _seal_lines.append("＜抗がん薬＞\t\t")
+    # ── G列：O欄・Pd欄 TSV ──
+    _regimen_name = _basic.get("レジメン名","")
+    _course_days  = _basic.get("1コース日数","")
+
+    _o_lines = [
+        "【O欄・Pd欄】\t\t\t\t\t\t",
+        f"●化学療法：【{protocol_no}】{_regimen_name}（1コース{_course_days}日）\t\t\t\t\t\t",
+        f"=B{_R_COURSE}\tコース目\t開始日\t=B{_R_START}\t\t",
+    ]
+
+    for _d in _cancer_drugs:
+        _code   = str(_d.get("管理コード",""))
+        _m      = _mdict.get(_code, {})
+        _name_h = to_half_kana(str(_m.get("一般名（全角）","") or _d.get("商品名","") or _code))
+        _dbase  = str(_d.get("用量根拠",""))
+        _day    = str(_d.get("投与Day文字",""))
+        try:
+            _rv = str(_d.get("投与量数値","") or "").strip()
+            _rv = "".join(c for c in _rv if c.isdigit() or c == ".")
+            _dnum = float(_rv or 0)
+        except:
+            _dnum = 0
+        _dn = int(_dnum) if _dnum == int(_dnum) else _dnum
+        _dr = _drug_rows.get(_code, "")
+
+        if _dbase == "BSA依存":    _nd = f"{_name_h}({_dn}mg/m²)"
+        elif _dbase == "AUC依存":  _nd = f"{_name_h}(AUC{_dn})"
+        elif _dbase == "BW依存":   _nd = f"{_name_h}({_dn}mg/kg)"
+        elif _dbase == "固定用量": _nd = f"{_name_h}({_dn}mg)"
+        else:                       _nd = _name_h
+
+        if _dbase == "固定用量" or not _dr:
+            _o_lines.append(f"{_nd}\t\t\t\t\t({_day})")
+        else:
+            _pct2 = f'=IF(C{_dr}="","",TEXT(C{_dr}/B{_dr}*100,"0.0")&"%")'
+            _o_lines.append(
+                f"{_nd}\t理論値：\t=B{_dr}\t処方量：\t=C{_dr}\t{_pct2}\t({_day})"
+            )
+
+    _inj_parts = []
+    for _d in _support_inj:
+        _code = str(_d.get("管理コード",""))
+        _m    = _mdict.get(_code, {})
+        _nh   = to_half_kana(str(_m.get("一般名（全角）","") or _d.get("商品名","")))
+        _ds, _us = format_dose_text(_d)
+        _inj_parts.append(f"{_nh} {_ds}{_us}(day: {_d.get('投与Day文字','')})")
+    _oral_parts = []
+    for _d in _support_oral:
+        _code = str(_d.get("管理コード",""))
+        _m    = _mdict.get(_code, {})
+        _nh   = to_half_kana(str(_m.get("一般名（全角）","") or _d.get("商品名","")))
+        _ds, _us = format_dose_text(_d)
+        _oral_parts.append(f"{_nh} {_ds}{_us}(day: {_d.get('投与Day文字','')})")
+    if _inj_parts:
+        _o_lines.append(f"支持療法：{'、'.join(_inj_parts)}\t\t\t\t\t")
+    if _oral_parts:
+        _o_lines.append(f"　　　　　{'、'.join(_oral_parts)}\t\t\t\t\t")
+
+    _o_tsv = "\n".join(_o_lines)
+
+    # ── O列：手帳シール TSV ──
+    _seal_lines = [
+        "【手帳シール】\t\t\t",
+        f"●化学療法：【{protocol_no}】{_regimen_name}（1コース{_course_days}日）\t\t\t",
+        f"=B{_R_COURSE}\tコース目\t開始日\t=B{_R_START}",
+        "",
+        "＜抗がん薬＞\t\t\t",
+    ]
 
     for _d in _cancer_drugs:
         _code  = str(_d.get("管理コード",""))
         _m     = _mdict.get(_code, {})
-        _name  = str(_m.get("採用商品名（全角）","") or _d.get("商品名","") or _code)
+        _nf    = str(_m.get("採用商品名（全角）","") or _d.get("商品名","") or _code)
         _dbase = str(_d.get("用量根拠",""))
         _day   = str(_d.get("投与Day文字",""))
         try:
@@ -2657,78 +2719,68 @@ if selected_basic and result:
         _dn = int(_dnum) if _dnum == int(_dnum) else _dnum
         _dr = _drug_rows.get(_code, "")
 
-        if _dbase == "固定用量":
-            _dose_str = f"投与量：{_dn}mg"
-        elif _dbase == "BSA依存":
-            _dose_str = f"{_dn}mg/m²　処方量：（D{_dr}セル参照）"
-        elif _dbase == "AUC依存":
-            _dose_str = f"AUC：{_dn}　処方量：（D{_dr}セル参照）"
-        elif _dbase == "BW依存":
-            _dose_str = f"{_dn}mg/kg　処方量：（D{_dr}セル参照）"
-        else:
-            _dose_str = "要確認"
+        if _dbase == "BSA依存":    _nd2 = f"{_nf}({_dn}mg/m²)"
+        elif _dbase == "AUC依存":  _nd2 = f"{_nf}(AUC{_dn})"
+        elif _dbase == "BW依存":   _nd2 = f"{_nf}({_dn}mg/kg)"
+        elif _dbase == "固定用量": _nd2 = f"{_nf}({_dn}mg)"
+        else:                       _nd2 = _nf
 
-        _seal_lines.append(f"{_name}\t{_dose_str}\t({_day})")
+        if _dbase == "固定用量" or not _dr:
+            _seal_lines.append(f"{_nd2}\t\t\t({_day})")
+        else:
+            _seal_lines.append(f"{_nd2}\t処方量：\t=C{_dr}\t({_day})")
 
     if _support_inj or _support_oral:
-        _seal_lines.append("")
-        _seal_lines.append("＜支持療法＞\t\t")
+        _seal_lines += ["", "＜支持療法＞\t\t\t"]
         for _d in _support_inj:
-            _code  = str(_d.get("管理コード",""))
-            _m     = _mdict.get(_code, {})
-            _name_h = str(_m.get("一般名（半角カナ）","") or _m.get("採用商品名（全角）","") or _d.get("商品名",""))
+            _code = str(_d.get("管理コード",""))
+            _m    = _mdict.get(_code, {})
+            _nh   = to_half_kana(str(_m.get("一般名（全角）","") or _d.get("商品名","")))
             _ds, _us = format_dose_text(_d)
-            _day = str(_d.get("投与Day文字",""))
-            _seal_lines.append(f"{_name_h} {_ds}{_us}\t\t({_day})")
+            _seal_lines.append(f"{_nh} {_ds}{_us}\t\t\t({_d.get('投与Day文字','')})")
         for _d in _support_oral:
-            _code  = str(_d.get("管理コード",""))
-            _m     = _mdict.get(_code, {})
-            _name_h = str(_m.get("一般名（半角カナ）","") or _m.get("採用商品名（全角）","") or _d.get("商品名",""))
+            _code = str(_d.get("管理コード",""))
+            _m    = _mdict.get(_code, {})
+            _nh   = to_half_kana(str(_m.get("一般名（全角）","") or _d.get("商品名","")))
             _ds, _us = format_dose_text(_d)
-            _day = str(_d.get("投与Day文字",""))
-            _seal_lines.append(f"{_name_h} {_ds}{_us}\t\t({_day})")
+            _seal_lines.append(f"{_nh} {_ds}{_us}\t\t\t({_d.get('投与Day文字','')})")
 
     _seal_tsv = "\n".join(_seal_lines)
 
+    # ── コピーボタン共通 ──
+    def _copy_btn(tsv_val, label, color):
+        _js = (tsv_val
+               .replace("\\", "\\\\")
+               .replace("`", "\\`")
+               .replace("\n", "\\n")
+               .replace("\r", "\\r"))
+        _components.html(
+            f'<button onclick="navigator.clipboard.writeText(`{_js}`)'
+            f'.then(()=>{{this.innerText=\'✅ コピー済み\';'
+            f'setTimeout(()=>{{this.innerText=\'{label}\'}},2000)}})"'
+            f' style="background:{color};color:white;border:none;padding:10px 20px;'
+            f'border-radius:6px;cursor:pointer;width:100%;font-size:15px;">'
+            f'{label}</button>',
+            height=50
+        )
+
     # ── 表示 ──
-    st.markdown("**① A1セルから貼り付け：パラメータ入力欄＋処方量入力**")
-    st.text_area(
-        "パラメータ入力欄（A1セルから貼り付け）",
-        value=_param_tsv,
-        height=300,
-        key="tsv_param"
-    )
-    _param_tsv_js = _param_tsv.replace("\\", "\\\\").replace("`", "\\`").replace("\n", "\\n").replace("\r", "\\r")
-    _components.html(
-        f'<button onclick="navigator.clipboard.writeText(`{_param_tsv_js}`)'
-        f'.then(()=>{{this.innerText=\'✅ コピー済み\';'
-        f'setTimeout(()=>{{this.innerText=\'📋 パラメータ欄をコピー\'}},2000)}})"'
-        f' style="background:#1976D2;color:white;border:none;padding:10px 20px;'
-        f'border-radius:6px;cursor:pointer;width:100%;font-size:15px;">'
-        f'📋 パラメータ欄をコピー</button>',
-        height=50
-    )
+    st.markdown("**① A1セルから貼り付け：パラメータ入力欄（A〜D列）**")
+    st.caption("B列に数値入力・C列に数式を入力。C列に数値が入ると D列に達成率が自動計算されます。")
+    st.text_area("パラメータ入力欄", value=_param_tsv, height=280, key="tsv_param")
+    _copy_btn(_param_tsv, "📋 パラメータ欄をコピー", "#1976D2")
 
-    _seal_row_start = len(_param_lines) + 5
-    st.markdown(f"**② A{_seal_row_start}セル（目安）から貼り付け：投与量シール**")
-    st.text_area(
-        "投与量シール（A列から貼り付け）",
-        value=_seal_tsv,
-        height=200,
-        key="tsv_seal"
-    )
-    _seal_tsv_js = _seal_tsv.replace("\\", "\\\\").replace("`", "\\`").replace("\n", "\\n").replace("\r", "\\r")
-    _components.html(
-        f'<button onclick="navigator.clipboard.writeText(`{_seal_tsv_js}`)'
-        f'.then(()=>{{this.innerText=\'✅ コピー済み\';'
-        f'setTimeout(()=>{{this.innerText=\'📋 投与量シールをコピー\'}},2000)}})"'
-        f' style="background:#388E3C;color:white;border:none;padding:10px 20px;'
-        f'border-radius:6px;cursor:pointer;width:100%;font-size:15px;">'
-        f'📋 投与量シールをコピー</button>',
-        height=50
-    )
+    st.markdown("**② G1セルから貼り付け：O欄・Pd欄**")
+    st.caption("G列から貼り付け。理論値・処方量・達成率はA列のB・C列を自動参照します。")
+    st.text_area("O欄・Pd欄", value=_o_tsv, height=180, key="tsv_o")
+    _copy_btn(_o_tsv, "📋 O欄・Pd欄をコピー", "#7B1FA2")
 
-    st.info("💡 O欄・Pd欄テキストは下の「テキスト生成」ページで生成してコピーしてください")
+    st.markdown("**③ O1セルから貼り付け：手帳シール**")
+    st.caption("O列から貼り付け。処方量はA列のC列を自動参照します。")
+    st.text_area("手帳シール", value=_seal_tsv, height=180, key="tsv_seal")
+    _copy_btn(_seal_tsv, "📋 手帳シールをコピー", "#388E3C")
+
+    st.info("💡 O欄・Pd欄の副作用・Pd欄テキストは下の「テキスト生成」ページで生成してコピーしてください")
 
 else:
     st.info("👆 レジメンを選択するとテンプレートが表示されます")
