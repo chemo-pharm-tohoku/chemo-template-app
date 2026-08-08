@@ -2883,27 +2883,27 @@ if selected_basic and result:
 
     # ── 表示 ──
     st.markdown("**① A1セルに貼り付け：パラメータ入力欄（A〜D列）**")
-    st.caption("B列に数値入力・C列に数式を入力。C列に数値が入ると D列に達成率が自動計算されます。")
+    st.caption("B列にパラメーター数値入力。C列に処方量数値が入ると D列（％）が自動計算されます。")
     # st.text_area("パラメータ入力欄", value=_param_tsv, height=280, key=f"tsv_param_{protocol_no}")
     _copy_btn(_param_tsv, "📋 パラメータ欄をコピー　A1セルに貼り付け", "#1976D2")
 
     st.markdown("**② G1セルに貼り付け：O欄・Pd欄**")
-    st.caption("G列から貼り付け。理論値・処方量・達成率はA列のB・C列を自動参照します。")
+    st.caption("理論値・処方量・達成率は①のB・C列を自動参照します。")
     # st.text_area("O欄・Pd欄", value=_o_tsv, height=180, key=f"tsv_o_{protocol_no}")
     _copy_btn(_o_tsv, "📋 O欄・Pd欄をコピー　G1セルに貼り付け", "#7B1FA2")
 
     st.markdown("**③ O1セルに貼り付け：手帳シール**")
-    st.caption("O列から貼り付け。処方量はA列のC列を自動参照します。")
+    st.caption("処方量は①のC列を自動参照します。")
     # st.text_area("手帳シール", value=_seal_tsv, height=180, key=f"tsv_seal_{protocol_no}")
     _copy_btn(_seal_tsv, "📋 手帳シールをコピー　O1セルに貼り付け", "#388E3C")
 
-    st.info("💡 O欄・Pd欄の副作用・Pd欄テキストは下の「テキスト生成」ページで生成してコピーしてください")
+    st.info("💡 実際の個人パラメーターをアプリ上で直接入力してO欄・Pd欄を生成することができます。下の「個人テキスト生成」ページに進んでください。")
 
 else:
     st.info("👆 レジメンを選択するとテンプレートが表示されます")
 
 st.divider()
-st.subheader("📋 テキスト生成")
+st.subheader("📋 個人テキスト生成")
 st.caption("患者パラメータを入力してO欄・Pd欄テキストを生成します")
 if st.button(
     "📋 O欄・Pd欄 テキスト生成ページへ",
