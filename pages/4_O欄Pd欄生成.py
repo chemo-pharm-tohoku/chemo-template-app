@@ -12,7 +12,6 @@ st.set_page_config(
 
 st.sidebar.title("メニュー")
 
-# ===== 共通設定（3_テンプレート生成.py と同一） =====
 import gspread
 from google.oauth2 import service_account
 
@@ -61,7 +60,7 @@ def load_all_data():
     return basic_data, drug_data, master_data, pd_data, ae_data
 
 
-# ===== 投与量計算ヘルパー（3_テンプレート生成.py から流用） =====
+# ===== 投与量計算ヘルパー =====
 
 def format_dose_text(drug):
     try:
@@ -91,10 +90,7 @@ def format_dose_text(drug):
 
 
 def calc_dose(drug, bsa, bw, ccr):
-    """
-    投与量を計算して文字列で返す。
-    未入力・計算不能の場合は '未入力' を返す。
-    """
+    """投与量を計算して文字列で返す。未入力・計算不能の場合は '未入力' を返す。"""
     dose_base = str(drug.get('用量根拠', ''))
     try:
         _rv = str(drug.get('投与量数値', '') or '').strip()
@@ -102,9 +98,7 @@ def calc_dose(drug, bsa, bw, ccr):
         dose_num = float(_rv or 0)
     except:
         dose_num = 0
-
     dose_str, unit_str = format_dose_text(drug)
-
     if dose_base == '固定用量':
         return f"{dose_str}{unit_str}"
     elif dose_base == 'BSA依存':
@@ -126,6 +120,32 @@ def calc_dose(drug, bsa, bw, ccr):
         return f"{val_str}mg"
     else:
         return f"{dose_str}{unit_str}"
+
+
+def calc_dose_num(drug, bsa, bw, ccr):
+    """計算値を数値で返す（達成率計算用）。計算不能な場合はNoneを返す。"""
+    dose_base = str(drug.get('用量根拠', ''))
+    try:
+        _rv = str(drug.get('投与量数値', '') or '').strip()
+        _rv = ''.join(c for c in _rv if c.isdigit() or c == '.')
+        dose_num = float(_rv or 0)
+    except:
+        dose_num = 0
+    if dose_base == '固定用量':
+        return dose_num
+    elif dose_base == 'BSA依存':
+        if bsa is None:
+            return None
+        return round(bsa * dose_num, 1)
+    elif dose_base == 'AUC依存':
+        if ccr is None:
+            return None
+        return round((ccr + 25) * dose_num, 0)
+    elif dose_base == 'BW依存':
+        if bw is None:
+            return None
+        return round(bw * dose_num, 1)
+    return None
 
 
 def calc_ccr(bw, age, scr, sex):
@@ -158,12 +178,12 @@ def get_regimen(protocol_no, basic_data, drug_data, master_data):
         master = master_dict.get(code, {})
         merged = dict(drug)
         merged.update({
-            '一般名（全角）'        : master.get('一般名（全角）', ''),
-            '採用商品名（全角）'    : master.get('採用商品名（全角）', ''),
-            '薬剤区分'             : master.get('薬剤区分', ''),
-            '支持療法分類'         : master.get('支持療法分類', ''),
-            '1V当たりmg'           : master.get('1V当たりmg', ''),
-            '患者向け説明'         : master.get('患者向け説明', ''),
+            '一般名（全角）'     : master.get('一般名（全角）', ''),
+            '採用商品名（全角）' : master.get('採用商品名（全角）', ''),
+            '薬剤区分'          : master.get('薬剤区分', ''),
+            '支持療法分類'      : master.get('支持療法分類', ''),
+            '1V当たりmg'        : master.get('1V当たりmg', ''),
+            '患者向け説明'      : master.get('患者向け説明', ''),
         })
         drugs.append(merged)
     return {'basic': basic, 'drugs': drugs, 'master_dict': master_dict}
@@ -172,10 +192,6 @@ def get_regimen(protocol_no, basic_data, drug_data, master_data):
 # ===== 副作用フラグ取得 =====
 
 def get_ae_flags(protocol_no, drug_data, ae_data):
-    """
-    このレジメンの薬剤の副作用フラグ（○）を収集して返す。
-    戻り値: {列名: True} の dict
-    """
     cancer_codes = list(dict.fromkeys([
         str(d.get('管理コード', '')).strip()
         for d in drug_data
@@ -228,9 +244,7 @@ INJECTION_ORDER = {
 
 def build_o_text(protocol_no, basic_data, drug_data, master_data,
                  bsa, bw, ccr, start_date, course_num):
-    """
-    O欄テキストを文字列で生成して返す。
-    """
+    """O欄テキストを文字列で生成して返す。"""
     result = get_regimen(protocol_no, basic_data, drug_data, master_data)
     if result is None:
         return ''
@@ -268,7 +282,7 @@ def build_o_text(protocol_no, basic_data, drug_data, master_data,
     if patient_parts:
         lines.append("  " + "  ".join(patient_parts))
 
-    # 3行目以降：開始日・コース目
+    # 開始日・コース目
     if start_date:
         course_marks = ["①","②","③","④","⑤","⑥","⑦","⑧","⑨","⑩"]
         mark = course_marks[course_num - 1] if 1 <= course_num <= 10 else f"{course_num}"
@@ -292,22 +306,42 @@ def build_o_text(protocol_no, basic_data, drug_data, master_data,
         day_str = str(drug.get('投与Day文字', ''))
 
         # 計算用量
-        calc = calc_dose(drug, bsa, bw, ccr)
+        calc     = calc_dose(drug, bsa, bw, ccr)
+        calc_num = calc_dose_num(drug, bsa, bw, ccr)
+
+        # 実投与量（セッションステートから取得）
+        _actual_key = f"p6_actual_{protocol_no}_{code}"
+        _actual_val = st.session_state.get(_actual_key, 0.0)
+        _actual_mg  = float(_actual_val) if _actual_val else 0.0
+
+        # 投与量表示文字列
+        if dose_base == '固定用量':
+            _dose_display = f"投与量：{dose_str}{unit_str}"
+        elif _actual_mg > 0:
+            _actual_str = str(int(_actual_mg)) if _actual_mg == int(_actual_mg) else str(_actual_mg)
+            if calc_num and calc_num > 0:
+                _rate = _actual_mg / calc_num * 100
+                _dose_display = f"計算値：{calc}　処方量：{_actual_str}mg（{_rate:.1f}%）"
+            else:
+                _dose_display = f"処方量：{_actual_str}mg"
+        else:
+            _dose_display = f"投与量：{calc}"
 
         if dose_base == '固定用量':
             lines.append(
                 f"{name_half} ({dose_str}{unit_str})"
-                f"  投与量：{dose_str}{unit_str}  {day_str}"
+                f"  {_dose_display}  {day_str}"
             )
         elif dose_base == 'AUC依存':
             lines.append(
                 f"{name_half} (AUC{int(dose_num)})"
-                f"  投与量：{calc}  {day_str}"
+                f"  {_dose_display}  {day_str}"
             )
         else:
+            _dn = int(dose_num) if dose_num == int(dose_num) else dose_num
             lines.append(
-                f"{name_half} ({dose_num}{unit_str})"
-                f"  投与量：{calc}  {day_str}"
+                f"{name_half} ({_dn}{unit_str})"
+                f"  {_dose_display}  {day_str}"
             )
 
     # 支持療法行
@@ -338,14 +372,12 @@ def build_o_text(protocol_no, basic_data, drug_data, master_data,
 
 # ===== O欄＋Pd欄テキスト生成 =====
 
-# 副作用評価テキスト定義
-# (テキスト, 常時表示, 副作用マスタフラグキー)
 AE_ITEMS = [
-    ("●嘔吐　　　　　　□なし　□あり　(嘔吐回数;　　　)",                      True,  None),
-    ("●悪心　　　　　　□なし　□G1　□G2　□G3",                               True,  None),
-    ("●食欲不振　　　　□なし　□G1　□G2　□G3　□G4",                         True,  None),
-    ("●便秘　　　　　　□なし　□あり　（ベースライン 回数：　　　、BS：　　　）", True, None),
-    ("●倦怠感　　　　　□なし　□G1　□G2　□G3",                               True,  None),
+    ("●嘔吐　　　　　　□なし　□あり　(嘔吐回数;　　　)",                       True,  None),
+    ("●悪心　　　　　　□なし　□G1　□G2　□G3",                                True,  None),
+    ("●食欲不振　　　　□なし　□G1　□G2　□G3　□G4",                          True,  None),
+    ("●便秘　　　　　　□なし　□あり　（ベースライン 回数：　　　、BS：　　　）", True,  None),
+    ("●倦怠感　　　　　□なし　□G1　□G2　□G3",                                True,  None),
     (
         "●骨髄抑制\n"
         "　　WBC　　□なし　□G1　□G2　□G3　□G4\n"
@@ -354,23 +386,22 @@ AE_ITEMS = [
         "　　PLT　　　□なし　□G1　□G2　□G3　□G4",
         True, None
     ),
-    ("●肝機能障害　　　□なし　□あり",                                         True,  None),
-    ("●腎機能障害　　　□なし　□あり",                                         True,  None),
-    ("●電解質異常　　　□なし　□あり",                                         True,  None),
+    ("●肝機能障害　　　□なし　□あり",                                          True,  None),
+    ("●腎機能障害　　　□なし　□あり",                                          True,  None),
+    ("●電解質異常　　　□なし　□あり",                                          True,  None),
     ("●下痢　　　　　　□なし　□あり　（ベースライン 回数：　　　、BS：　　　）", False, "下痢"),
-    ("●口腔粘膜炎　　　□なし　□G1　□G2　□G3　□G4",                        False, "口腔粘膜炎"),
-    ("●脱毛　　　　　　□なし　□G1　□G2",                                    False, "脱毛"),
-    ("●末梢神経障害　　□なし　□G1　□G2　□G3　□G4",                        False, "末梢神経障害"),
-    ("●味覚異常　　　　□なし　□G1　□G2",                                    False, "味覚異常"),
-    ("●IRR　　　　　　 □なし　□あり",                                        False, "IRR"),
-    ("●手足症候群　　　□なし　□G1　□G2　□G3",                              False, "手足症候群"),
-    ("●皮膚障害　　　　□なし　□あり",                                        False, "皮膚障害"),
-    ("●間質性肺炎　　　□なし　□あり",                                        False, "間質性肺炎"),
-    ("●心障害　　　　　□なし　□あり",                                        False, "心障害"),
-    ("●その他（　　　　　　　　　　　）",                                      True,  None),
+    ("●口腔粘膜炎　　　□なし　□G1　□G2　□G3　□G4",                         False, "口腔粘膜炎"),
+    ("●脱毛　　　　　　□なし　□G1　□G2",                                     False, "脱毛"),
+    ("●末梢神経障害　　□なし　□G1　□G2　□G3　□G4",                         False, "末梢神経障害"),
+    ("●味覚異常　　　　□なし　□G1　□G2",                                     False, "味覚異常"),
+    ("●IRR　　　　　　 □なし　□あり",                                         False, "IRR"),
+    ("●手足症候群　　　□なし　□G1　□G2　□G3",                               False, "手足症候群"),
+    ("●皮膚障害　　　　□なし　□あり",                                         False, "皮膚障害"),
+    ("●間質性肺炎　　　□なし　□あり",                                         False, "間質性肺炎"),
+    ("●心障害　　　　　□なし　□あり",                                         False, "心障害"),
+    ("●その他（　　　　　　　　　　　）",                                       True,  None),
 ]
 
-# irAE評価項目
 IRAE_ITEMS = [
     "　●IRR　　　　　　　　　　　　□なし　□あり",
     "　●IP様症状(空咳･呼吸困難感)　□なし　□あり；/ KL-6：",
@@ -391,7 +422,6 @@ IRAE_ITEMS = [
     "　●その他（　　　　　　　　　　　）",
 ]
 
-# Pd説明文定義（副作用フラグキー → 説明文）
 PD_TEXTS = {
     "骨髄抑制": (
         "【骨髄抑制】化学療法開始から1～2週間後に白血球/好中球が減少します。"
@@ -401,7 +431,6 @@ PD_TEXTS = {
     ),
     "悪心嘔吐": (
         "【悪心嘔吐】症状がある場合は、脂っぽい食事は避けるとよいでしょう。\n"
-        "　脱水症状にならないように、スポーツドリンクなどで水分をとりましょう。\n"
         "　吐き気を抑える薬が処方されている場合は、我慢せずに飲みましょう。"
     ),
     "末梢神経障害": (
@@ -415,20 +444,13 @@ PD_TEXTS = {
         "毎朝お口の中（歯ぐき・頬・舌など）をチェックし、"
         "食前のうがいと食後の優しい歯磨きで口腔内を清潔に保ちましょう。"
     ),
-    "脱毛": (
-        "【脱毛】治療開始から2～3週間後に脱毛が始まることがあります。"
-        "治療終了後に毛髪は回復することがほとんどです。"
-        "ウィッグや帽子などを活用しましょう。"
-    ),
     "下痢": (
         "【下痢】水分補給を十分に行いましょう。"
-        "脂っぽいもの・刺激物・乳製品は控えめにしてください。"
         "下痢が続く場合や血便がある場合はすぐにご連絡ください。"
     ),
     "手足症候群": (
         "【手足症候群】手のひらや足の裏が赤くなったり、ひび割れ・水疱・痛みが"
         "出ることがあります。保湿クリームでのケアが重要です。"
-        "靴擦れや締め付けを避け、皮膚への刺激を減らしましょう。"
     ),
     "irAE": (
         "【irAE（免疫関連有害事象）】免疫チェックポイント阻害薬では、"
@@ -447,13 +469,10 @@ PD_TEXTS = {
 def build_opd_text(protocol_no, basic_data, drug_data,
                    master_data, ae_data, pd_data,
                    bsa, bw, ccr, start_date, course_num):
-    """
-    O欄＋Pd欄 全テキストを生成して返す。
-    """
-    ae_flags  = get_ae_flags(protocol_no, drug_data, ae_data)
-    has_irae  = ae_flags.get("irAE", False)
+    """O欄＋Pd欄 全テキストを生成して返す。"""
+    ae_flags = get_ae_flags(protocol_no, drug_data, ae_data)
+    has_irae = ae_flags.get("irAE", False)
 
-    # Pd カテゴリ・説明文取得
     basic_row   = next(
         (b for b in basic_data if b['プロトコールNo'] == protocol_no), {}
     )
@@ -468,7 +487,6 @@ def build_opd_text(protocol_no, basic_data, drug_data,
     )
     matched_pda = [p for p in pda_list if p['カテゴリID'] in pd_cat_list]
 
-    # 脱毛（PDA007）：フラグあれば追加
     pda007 = next((p for p in (pd_data or []) if p['カテゴリID'] == 'PDA007'), None)
     if pda007 and ae_flags.get('脱毛', False):
         if not any(p['カテゴリID'] == 'PDA007' for p in matched_pda):
@@ -481,7 +499,7 @@ def build_opd_text(protocol_no, basic_data, drug_data,
 
     lines = []
 
-    # ── ブロック1：O欄本文 ──
+    # ブロック1：O欄本文
     o_text = build_o_text(
         protocol_no, basic_data, drug_data, master_data,
         bsa, bw, ccr, start_date, course_num
@@ -489,17 +507,13 @@ def build_opd_text(protocol_no, basic_data, drug_data,
     lines.append(o_text)
     lines.append("")
 
-    # ── ブロック2：HBV スクリーニング ──
+    # ブロック2：HBV
     lines.append("●B型肝炎スクリーニング")
-    lines.append(
-        "　HBs-AG：□－　□＋　、HBs-AB：□－　□＋　、HBc-AB：□－　□＋"
-    )
-    lines.append(
-        "　※＋がある場合→HBV-DNA　□検出限界以下（　　　　）"
-    )
+    lines.append("　HBs-AG：□－　□＋　、HBs-AB：□－　□＋　、HBc-AB：□－　□＋")
+    lines.append("　※＋がある場合→HBV-DNA　□検出限界以下（　　　　）")
     lines.append("")
 
-    # ── ブロック3：副作用評価 ──
+    # ブロック3：副作用評価
     lines.append("◇副作用")
     lines.append(
         "*評価方法　評価日がd1：前クール全体で最も悪い検査値や症状\n"
@@ -511,16 +525,14 @@ def build_opd_text(protocol_no, basic_data, drug_data,
         lines.append(text)
     lines.append("")
 
-    # ── ブロック4：irAE ──
+    # ブロック4：irAE
     if has_irae:
-        lines.append(
-            "◇irAE　※検査値はベースラインを記載、最新値は【薬学的管理】参照"
-        )
+        lines.append("◇irAE　※検査値はベースラインを記載、最新値は【薬学的管理】参照")
         for item in IRAE_ITEMS:
             lines.append(item)
         lines.append("")
 
-    # ── ブロック5：Pd 記載 ──
+    # ブロック5：Pd記載
     lines.append(
         "Pd；ご本人に対して初回面談実施。服薬状況、服薬理解度および"
         "有害事象の発現状況の確認を行った。"
@@ -531,23 +543,19 @@ def build_opd_text(protocol_no, basic_data, drug_data,
         "（治療スケジュール、支持療法、副作用/対策）を行った。"
     )
 
-    ae_label_parts = ["骨髄抑制", "口内炎", "脱毛", "悪心嘔吐等"]
+    ae_label_parts = ["骨髄抑制", "口内炎", "悪心嘔吐等"]
     if has_irae:
         ae_label_parts.append("irAE")
     lines.append(
         "・代表的な有害事象（" + "・".join(ae_label_parts) + "）の対処法は以下の通り指導した。"
     )
 
-    # 副作用説明文（常時：骨髄抑制・悪心嘔吐、条件付き）
-    # 骨髄抑制・悪心嘔吐は常時
     lines.append(PD_TEXTS["骨髄抑制"])
     lines.append(PD_TEXTS["悪心嘔吐"])
 
-    # 副作用マスタ ○ の場合のみ追加
     CONDITIONAL_PD = [
         ("末梢神経障害", "末梢神経障害"),
         ("口腔粘膜炎",  "口腔粘膜炎"),
-        ("脱毛",        "脱毛"),
         ("下痢",        "下痢"),
         ("手足症候群",  "手足症候群"),
         ("irAE",        "irAE"),
@@ -557,7 +565,6 @@ def build_opd_text(protocol_no, basic_data, drug_data,
         if ae_flags.get(flag_key, False) and pd_key in PD_TEXTS:
             lines.append(PD_TEXTS[pd_key])
 
-    # スプレッドシートの Pd 説明文（matched_pda）
     for pda in matched_pda:
         cat_name = str(pda.get('カテゴリ名', '')).strip()
         text     = str(pda.get('説明文', '')).strip()
@@ -578,7 +585,6 @@ st.title("📋 O欄・Pd欄 テキスト生成")
 st.caption("レジメンを選択してパラメーターを入力するとカルテ貼り付け用テキストを生成します")
 st.divider()
 
-# キャッシュクリア
 if st.button("🔄 データを最新化する", key="btn_refresh_6"):
     st.cache_data.clear()
     st.cache_resource.clear()
@@ -646,8 +652,8 @@ if result:
     cancer_drugs = [d for d in result['drugs']
                     if str(d.get('①O欄_抗がん剤', '')) == '○']
 
-need_bsa = any(str(d.get('用量根拠', '')) == 'BSA依存'            for d in cancer_drugs)
-need_ccr = any(str(d.get('用量根拠', '')) == 'AUC依存'            for d in cancer_drugs)
+need_bsa = any(str(d.get('用量根拠', '')) == 'BSA依存'             for d in cancer_drugs)
+need_ccr = any(str(d.get('用量根拠', '')) == 'AUC依存'             for d in cancer_drugs)
 need_bw  = any(str(d.get('用量根拠', '')) in ('BW依存', 'AUC依存') for d in cancer_drugs)
 need_age = need_ccr
 need_sex = need_ccr
@@ -707,7 +713,6 @@ if need_bsa or need_bw or need_ccr:
             )
         col_idx += 1
 
-    # Ccr 自動計算
     if need_ccr:
         if bw and age and scr and sex:
             ccr = calc_ccr(bw, age, scr, sex)
@@ -715,7 +720,7 @@ if need_bsa or need_bw or need_ccr:
         else:
             st.caption("💡 体重・年齢・SCr・性別を入力すると Ccr を自動計算します")
 
-# 開始日・コース目（常時表示）
+# 開始日・コース目
 cols2 = st.columns(2)
 with cols2[0]:
     start_date = st.date_input(
@@ -726,6 +731,41 @@ with cols2[1]:
         "コース目", min_value=1, max_value=10,
         value=1, step=1, key="p6_course"
     )
+
+# ===== 実投与量入力（BSA/AUC/BW依存のみ） =====
+_need_actual = any(
+    str(d.get('用量根拠', '')) in ('BSA依存', 'AUC依存', 'BW依存')
+    for d in cancer_drugs
+)
+
+if _need_actual and result:
+    st.divider()
+    st.subheader("② - 2　実際の投与量を入力（任意）")
+    st.caption("計算値と異なる用量を投与する場合に入力してください。達成率を自動計算します。")
+
+    for _d in cancer_drugs:
+        _dose_base = str(_d.get('用量根拠', ''))
+        if _dose_base not in ('BSA依存', 'AUC依存', 'BW依存'):
+            continue
+        _code     = str(_d.get('管理コード', ''))
+        _mast     = result['master_dict'].get(_code, {})
+        _name     = str(_mast.get('一般名（全角）', '') or _d.get('商品名', '') or _code)
+        _calc     = calc_dose(_d, bsa, bw, ccr)
+        _calc_num = calc_dose_num(_d, bsa, bw, ccr)
+        _key      = f"p6_actual_{protocol_no}_{_code}"
+
+        st.markdown(f"**{_name}**　計算値：{_calc}")
+        _actual_input = st.number_input(
+            f"{_name} 実際の投与量 (mg)",
+            min_value=0.0,
+            value=0.0,
+            step=1.0,
+            format="%.1f",
+            key=_key,
+        )
+        if _actual_input > 0 and _calc_num and _calc_num > 0:
+            _rate = _actual_input / _calc_num * 100
+            st.caption(f"　達成率：{_rate:.1f}%")
 
 st.divider()
 
@@ -752,7 +792,6 @@ if "p6_generated_text" in st.session_state:
 
     st.success("✅ 生成完了！下のテキストをコピーしてカルテに貼り付けてください。")
 
-    # コピー用テキストエリア
     st.text_area(
         label="📄 O欄・Pd欄テキスト（全選択してコピー）",
         value=text,
@@ -760,7 +799,6 @@ if "p6_generated_text" in st.session_state:
         key="p6_textarea"
     )
 
-    # ワンクリックコピー（JS インジェクション）
     import streamlit.components.v1 as components
     copy_js = f"""
     <button
