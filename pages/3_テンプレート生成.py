@@ -2863,10 +2863,10 @@ if selected_basic and result:
     st.text_area("O欄・Pd欄", value=_o_tsv, height=180, key="tsv_o")
     _copy_btn(_o_tsv, "📋 O欄・Pd欄をコピー　G1セルに貼り付け", "#7B1FA2")
 
-    st.markdown("**③ O1セルから貼り付け：手帳シール**")
+    st.markdown("**③ O1セルに貼り付け：手帳シール**")
     st.caption("O列から貼り付け。処方量はA列のC列を自動参照します。")
     st.text_area("手帳シール", value=_seal_tsv, height=180, key="tsv_seal")
-    _copy_btn(_seal_tsv, "📋 手帳シールをコピー　O1セルから貼り付け", "#388E3C")
+    _copy_btn(_seal_tsv, "📋 手帳シールをコピー　O1セルに貼り付け", "#388E3C")
 
     st.info("💡 O欄・Pd欄の副作用・Pd欄テキストは下の「テキスト生成」ページで生成してコピーしてください")
 
