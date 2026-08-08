@@ -2593,7 +2593,7 @@ if selected_basic and result:
         "",
         "【投与量】\t\t\t",
         f"\t\t↓入力\t",
-        "薬剤名\t理論値\t処方量(mg)\t%",
+        "薬剤名\t理論値(mg)\t処方量(mg)\t%",
     ]
 
     _drug_rows = {}
@@ -2630,7 +2630,7 @@ if selected_basic and result:
             _formula   = f"=B{_R_BW}*{_dnum}"
             _name_disp = f"{_name}({_dn}mg/kg)"
         elif _dbase == "固定用量":
-            _formula   = f"{_dn}mg"
+            _formula   = f"{_dn}"
             _name_disp = _name
         else:
             _formula   = "要確認"
