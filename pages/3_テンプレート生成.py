@@ -2840,6 +2840,10 @@ if selected_basic and result:
 
         if _dbase == "固定用量":
             _seal_lines.append(f"{_nd2}\t処方量(mg)：\t=B{_dr}\t({_day})")
+        elif not _dr:
+            _seal_lines.append(f"{_nd2}\t\t\t({_day})")
+        else:
+            _seal_lines.append(f"{_nd2}\t処方量(mg)：\t=C{_dr}\t({_day})")
 
     if _support_inj or _support_oral:
         _seal_lines += ["", "＜支持療法＞\t\t\t"]
