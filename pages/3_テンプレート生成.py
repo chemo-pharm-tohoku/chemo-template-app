@@ -2681,7 +2681,10 @@ if selected_basic and result:
         elif _dbase == "固定用量": _nd = f"{_name_h}({_dn}mg)"
         else:                       _nd = _name_h
 
-        if _dbase == "固定用量" or not _dr:
+        if _dbase == "固定用量":
+            # 固定用量：理論値・処方量欄なし
+            _o_lines.append(f"{_nd}\t\t\t\t\t({_day})")
+        elif not _dr:
             _o_lines.append(f"{_nd}\t\t\t\t\t({_day})")
         else:
             _pct2 = f'=IF(C{_dr}="","",TEXT(C{_dr}/B{_dr}*100,"0.0")&"%")'
@@ -2825,10 +2828,12 @@ if selected_basic and result:
         elif _dbase == "固定用量": _nd2 = f"{_nf}({_dn}mg)"
         else:                       _nd2 = _nf
 
-        if _dbase == "固定用量" or not _dr:
+        if _dbase == "固定用量":
+            _seal_lines.append(f"{_nd2}\t\t\t({_day})")
+        elif not _dr:
             _seal_lines.append(f"{_nd2}\t\t\t({_day})")
         else:
-             _seal_lines.append(f"{_nd2}\t処方量(mg)：\t=C{_dr}\t({_day})")
+            _seal_lines.append(f"{_nd2}\t処方量(mg)：\t=C{_dr}\t({_day})")
 
     if _support_inj or _support_oral:
         _seal_lines += ["", "＜支持療法＞\t\t\t"]
@@ -2869,17 +2874,17 @@ if selected_basic and result:
     # ── 表示 ──
     st.markdown("**① A1セルに貼り付け：パラメータ入力欄（A〜D列）**")
     st.caption("B列に数値入力・C列に数式を入力。C列に数値が入ると D列に達成率が自動計算されます。")
-    st.text_area("パラメータ入力欄", value=_param_tsv, height=280, key="tsv_param")
+    st.text_area("パラメータ入力欄", value=_param_tsv, height=280, key=f"tsv_param_{protocol_no}")
     _copy_btn(_param_tsv, "📋 パラメータ欄をコピー　A1セルに貼り付け", "#1976D2")
 
     st.markdown("**② G1セルに貼り付け：O欄・Pd欄**")
     st.caption("G列から貼り付け。理論値・処方量・達成率はA列のB・C列を自動参照します。")
-    st.text_area("O欄・Pd欄", value=_o_tsv, height=180, key="tsv_o")
+    st.text_area("O欄・Pd欄", value=_o_tsv, height=180, key=f"tsv_o_{protocol_no}")
     _copy_btn(_o_tsv, "📋 O欄・Pd欄をコピー　G1セルに貼り付け", "#7B1FA2")
 
     st.markdown("**③ O1セルに貼り付け：手帳シール**")
     st.caption("O列から貼り付け。処方量はA列のC列を自動参照します。")
-    st.text_area("手帳シール", value=_seal_tsv, height=180, key="tsv_seal")
+    st.text_area("手帳シール", value=_seal_tsv, height=180, key=f"tsv_seal_{protocol_no}")
     _copy_btn(_seal_tsv, "📋 手帳シールをコピー　O1セルに貼り付け", "#388E3C")
 
     st.info("💡 O欄・Pd欄の副作用・Pd欄テキストは下の「テキスト生成」ページで生成してコピーしてください")
