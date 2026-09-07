@@ -153,20 +153,3 @@ with st.container(border=True):
     st.markdown("")
     st.warning("⚠️ 本マスタを編集するとシステム全体に影響します。")
 
-st.divider()
-
-# ===== Pd説明文管理 =====
-st.subheader("📝 Pd 説明文管理")
-
-with st.container(border=True):
-    st.markdown("#### 📝 Pd 説明文管理")
-    st.write(
-        "化学療法指導記録（Pd欄）に使用する "
-        "説明文テンプレートを管理・登録。"
-    )
-    if st.button(
-        "📝 Pd 説明文管理へ",
-        use_container_width=True,
-        key="btn_top_pd"
-    ):
-        st.switch_page("pages/5_Pd説明文管理.py")
