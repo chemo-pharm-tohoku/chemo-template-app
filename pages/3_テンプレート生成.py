@@ -1071,170 +1071,112 @@ def build_o_pd_sheet(wb, protocol_no, basic_data, drug_data,
     return ws
 
 
-# ===== 追加：Pdシート生成関数 =====
-def build_pd_sheet(wb, protocol_no, basic_data, pd_data, master_data):
+# ===== 追加：Pdシート生成関数（新方式：カテゴリ名=フラグ名/薬剤名の完全一致）=====
+def build_pd_sheet(wb, protocol_no, basic_data, drug_data, master_data, ae_data, pd_data):
     """
     Pd欄シートを生成してワークブックに追加する。
-    O欄シートの次（index=2）に挿入。
+    O欄シートの次に挿入。
 
-    データフロー：
-    1. 基本情報L列からPdカテゴリIDリストを取得
-    2. PdシートからID照合→説明文・種別・優先順位を取得
-    3. 種別A/B/C別に分類
-    4. 説明文完全一致で重複統合、薬剤名を半角カナで「・」結合
-    5. カテゴリ別ブロック形式で出力
+    新方式データフロー：
+    1. レジメン内の抗がん剤の副作用マスタ○フラグを集計
+    2. レジメン内の抗がん剤の薬剤名（一般名・採用商品名・商品名）を集計
+    3. Pdシートの「カテゴリ名」が①または②と完全一致するものを抽出
+    4. 説明文完全一致で重複統合し、フラットな一覧で出力
     """
 
     # ---------- スタイル定義 ----------
-    FILL_PDA_HEADER = PatternFill('solid', fgColor='4CAF50')   # 🟢 緑
-    FILL_PDB_HEADER = PatternFill('solid', fgColor='FFC107')   # 🟡 黄
-    FILL_PDC_HEADER = PatternFill('solid', fgColor='2196F3')   # 🔵 青
-    FILL_PDA_ROW    = PatternFill('solid', fgColor='F1F8E9')   # 薄緑
-    FILL_PDB_ROW    = PatternFill('solid', fgColor='FFFDE7')   # 薄黄
-    FILL_PDC_ROW    = PatternFill('solid', fgColor='E3F2FD')   # 薄青
-    FILL_TITLE      = PatternFill('solid', fgColor='2E4057')   # ダーク
-    FILL_GUIDE      = PatternFill('solid', fgColor='FFF9C4')   # ガイド背景
+    FILL_TITLE   = PatternFill('solid', fgColor='2E4057')
+    FILL_GUIDE   = PatternFill('solid', fgColor='FFF9C4')
+    FILL_ROW     = PatternFill('solid', fgColor='F1F8E9')
+    FILL_HEADER2 = PatternFill('solid', fgColor='546E7A')
 
     FONT_BASE   = "BIZ UDゴシック"
-    FONT_WHITE  = Font(name=FONT_BASE, color='FFFFFF', bold=True, size=11)
-    FONT_BOLD   = Font(name=FONT_BASE, color='000000', bold=True)
     FONT_NORMAL = Font(name=FONT_BASE, color='000000', size=10)
-    FONT_GUIDE  = Font(name=FONT_BASE, color='795548', size=9)
     FONT_DRUG   = Font(name=FONT_BASE, color='1565C0', bold=True, size=10)
 
-    thin   = Side(style='thin',   color='CCCCCC')
-    medium = Side(style='medium', color='888888')
-    BORDER        = Border(left=thin,   right=thin,   top=thin,   bottom=thin)
-    BORDER_MEDIUM = Border(left=medium, right=medium, top=medium, bottom=medium)
+    thin = Side(style='thin', color='CCCCCC')
+    BORDER = Border(left=thin, right=thin, top=thin, bottom=thin)
 
-    CATEGORY_CONFIG = {
-        'A': {
-            'label'      : '🟢 A（PDA）　毎回説明する標準説明文',
-            'fill_header': FILL_PDA_HEADER,
-            'fill_row'   : FILL_PDA_ROW,
-        },
-        'B': {
-            'label'      : '🟡 B（PDB）　副作用が出た患者だけに説明',
-            'fill_header': FILL_PDB_HEADER,
-            'fill_row'   : FILL_PDB_ROW,
-        },
-        'C': {
-            'label'      : '🔵 C（PDC）　特定薬剤に必ず伝える固有注意',
-            'fill_header': FILL_PDC_HEADER,
-            'fill_row'   : FILL_PDC_ROW,
-        },
-    }
+    # ---------- 1. レジメン内抗がん剤の管理コード一覧 ----------
+    cancer_codes = list(dict.fromkeys([
+        str(d.get("管理コード","")).strip()
+        for d in drug_data
+        if str(d.get("プロトコールNo","")).strip() == protocol_no
+        and str(d.get("管理コード","")).strip().startswith("AC")
+    ]))
+    if not cancer_codes:
+        return
 
-    # ---------- 1. 基本情報L列からPdカテゴリIDを取得 ----------
-    basic_row = next(
-        (b for b in basic_data if b['プロトコールNo'] == protocol_no),
-        None
-    )
-    if basic_row is None:
-        return  # レジメンが見つからなければスキップ
+    # ---------- 2. 副作用○フラグの集計 ----------
+    ae_dict = {str(r.get("管理コード","")).strip(): r for r in (ae_data or [])}
+    ae_flags = {}
+    for code in cancer_codes:
+        ae_row = ae_dict.get(code, {})
+        for col_name, val in ae_row.items():
+            if str(val).strip() == "○":
+                ae_flags[col_name] = True
 
-    pd_cat_raw = str(basic_row.get('Pdカテゴリ', '')).strip()
-    if not pd_cat_raw:
-        return  # Pdカテゴリ未設定ならスキップ
+    # ---------- 3. レジメン内薬剤名の集計（一般名/採用商品名/商品名）----------
+    drug_names_for_pd = set()
+    drug_kana_by_name = {}   # カテゴリ名一致時に表示する半角カナ名
+    for code in cancer_codes:
+        m = next((mm for mm in master_data
+                   if str(mm.get("管理コード","")).strip() == code), {})
+        kana = str(m.get('一般名（半角カナ）', '')).strip()
+        for key in ("一般名（全角）", "採用商品名（全角）"):
+            nm = str(m.get(key, "")).strip()
+            if nm:
+                drug_names_for_pd.add(nm)
+                if kana:
+                    drug_kana_by_name[nm] = kana
+        d = next((dd for dd in drug_data
+                    if str(dd.get("管理コード","")).strip() == code), {})
+        nm2 = str(d.get("商品名", "")).strip()
+        if nm2:
+            drug_names_for_pd.add(nm2)
+            if kana and nm2 not in drug_kana_by_name:
+                drug_kana_by_name[nm2] = kana
 
-    # カンマ・読点・スペース区切りに対応
-    pd_ids = [x.strip() for x in re.split(r'[,、|\s]+', pd_cat_raw) if x.strip()]
-
-    # ---------- 2. PdシートからID照合 ----------
-    pd_dict = {str(p['カテゴリID']).strip(): p for p in pd_data if p.get('カテゴリID')}
-
+    # ---------- 4. Pdシートからカテゴリ名一致で抽出 ----------
     matched_pd = []
-    for pid in pd_ids:
-        if pid in pd_dict:
-            matched_pd.append(pd_dict[pid])
+    for p in (pd_data or []):
+        cat_name = str(p.get('カテゴリ名', '')).strip()
+        if not cat_name:
+            continue
+        is_flag_match = ae_flags.get(cat_name, False)
+        is_drug_match = cat_name in drug_names_for_pd
+        if is_flag_match or is_drug_match:
+            matched_pd.append({
+                'pd_row'    : p,
+                'drug_name' : drug_kana_by_name.get(cat_name, '') if is_drug_match else '',
+            })
 
     if not matched_pd:
-        return  # 対応するPdデータがなければスキップ
+        return  # 該当する説明文がなければスキップ
 
-    # ---------- 3. 薬品マスタから半角カナ辞書を作成 ----------
-    # キー：一般名（全角）→ 値：一般名（半角カナ）
-    master_kana = {
-        str(m.get('一般名（全角）', '')).strip(): str(m.get('一般名（半角カナ）', '')).strip()
-        for m in master_data
-        if m.get('一般名（全角）')
-    }
-
-    def get_half_kana_name(full_name):
-        """全角薬剤名→半角カナ。マスタになければto_half_kanaで変換"""
-        full_name = str(full_name).strip()
-        return master_kana.get(full_name) or to_half_kana(full_name)
-
-    # ---------- 4. 種別A/B/C別に分類・優先順位順ソート ----------
-    categorized = {'A': [], 'B': [], 'C': []}
-    for pd_row in matched_pd:
-        kubun = str(pd_row.get('種別', '')).strip().upper()
-        if kubun in categorized:
-            categorized[kubun].append(pd_row)
-
-    # 優先順位（F列）でソート。空白は末尾
-    for kubun in categorized:
-        categorized[kubun].sort(
-            key=lambda x: int(x['優先順位']) if str(x.get('優先順位','')).isdigit() else 999
-        )
-
-    # ---------- 5. 説明文重複統合（完全一致）＋薬剤名結合 ----------
-    # トリガーキーワードからマスタを逆引きして薬剤名を取得する補助関数
-    def get_drug_names_for_pd(pd_row):
-        """
-        PdシートのD列トリガーキーワード（|区切り）と
-        薬品マスタのトリガーキーワードを照合して半角カナ薬剤名リストを返す。
-        「手動設定」「全レジメン共通」の場合は空リストを返す。
-        """
-        trigger = str(pd_row.get('トリガーキーワード', '')).strip()
-        if not trigger or trigger in ('手動設定', '全レジメン共通', '抗Pd'):
-            return []
-        keywords = [k.strip() for k in trigger.split('|') if k.strip()]
-        # 薬品マスタの一般名（全角）とキーワードを照合
-        matched_names = []
-        for m in master_data:
-            gen_name = str(m.get('一般名（全角）', '')).strip()
-            if any(kw in gen_name for kw in keywords):
-                kana = str(m.get('一般名（半角カナ）', '')).strip()
-                if kana and kana not in matched_names:
-                    matched_names.append(kana)
-        return matched_names
-
-    def merge_pd_items(pd_list):
-        """
-        説明文完全一致で統合。
-        統合時は薬剤名を「ｼｽﾌﾟﾗﾁﾝ・ｶﾙﾎﾞﾌﾟﾗﾁﾝ：」形式に結合。
-        returns: list of dict {drug_names: [...], text: str, pd_row: dict}
-        """
-        text_to_item = {}  # 説明文 → {drug_names, text, pd_row}
-        for pd_row in pd_list:
-            text = str(pd_row.get('説明文', '')).strip()
-            drug_names = get_drug_names_for_pd(pd_row)
-            if text in text_to_item:
-                # 重複：薬剤名をマージ（重複しないように）
-                for n in drug_names:
-                    if n not in text_to_item[text]['drug_names']:
-                        text_to_item[text]['drug_names'].append(n)
-            else:
-                text_to_item[text] = {
-                    'drug_names': drug_names,
-                    'text'      : text,
-                    'pd_row'    : pd_row,
-                }
-        return list(text_to_item.values())
+    # ---------- 5. 説明文完全一致で重複統合 ----------
+    text_to_item = {}
+    for item in matched_pd:
+        text = str(item['pd_row'].get('説明文', '')).strip()
+        drug_name = item['drug_name']
+        if text in text_to_item:
+            if drug_name and drug_name not in text_to_item[text]['drug_names']:
+                text_to_item[text]['drug_names'].append(drug_name)
+        else:
+            text_to_item[text] = {
+                'drug_names': [drug_name] if drug_name else [],
+                'text'      : text,
+            }
+    merged_items = list(text_to_item.values())
 
     # ---------- 6. シート生成 ----------
     ws_pd = wb.create_sheet("Pd欄")
-
-    # O欄の次（index=2）に移動
-    # wb.sheetnames = ['入力', 'O欄', 'Pd欄', '投与量シール', '説明書'] にする
     o_index = wb.sheetnames.index('O欄') if 'O欄' in wb.sheetnames else 1
     wb.move_sheet("Pd欄", offset=-(len(wb.sheetnames) - 1 - o_index))
 
-    # 列幅設定
-    ws_pd.column_dimensions['A'].width = 35   # 薬剤名列
-    ws_pd.column_dimensions['B'].width = 80   # 説明文列
+    ws_pd.column_dimensions['A'].width = 35
+    ws_pd.column_dimensions['B'].width = 80
 
-    # タイトル行
     ws_pd.merge_cells('A1:B1')
     ws_pd['A1'] = f'【{protocol_no}】Pd説明文　コピペ用シート'
     ws_pd['A1'].fill      = FILL_TITLE
@@ -1242,97 +1184,51 @@ def build_pd_sheet(wb, protocol_no, basic_data, pd_data, master_data):
     ws_pd['A1'].alignment = Alignment(horizontal='left', vertical='center')
     ws_pd.row_dimensions[1].height = 28
 
-    # 使い方ガイド行
     ws_pd.merge_cells('A2:B2')
     ws_pd['A2'] = '💡 説明文をコピーして使用してください。複数薬剤で共通の説明は1行にまとめています。'
     ws_pd['A2'].fill      = FILL_GUIDE
-    ws_pd['A2'].font      = FONT_GUIDE
+    ws_pd['A2'].font      = Font(name=FONT_BASE, color='795548', size=9)
     ws_pd['A2'].alignment = Alignment(horizontal='left', vertical='center')
     ws_pd.row_dimensions[2].height = 18
 
     current_row = 3
 
-    # カテゴリA→B→C の順でブロック出力
-    for kubun in ['A', 'B', 'C']:
-        pd_list = categorized[kubun]
-        config  = CATEGORY_CONFIG[kubun]
+    for col, label in [(1, '薬剤名'), (2, '説明文')]:
+        c = ws_pd.cell(row=current_row, column=col)
+        c.value     = label
+        c.fill      = FILL_HEADER2
+        c.font      = Font(color='FFFFFF', bold=True, size=10)
+        c.alignment = Alignment(horizontal='center', vertical='center')
+        c.border    = BORDER
+    ws_pd.row_dimensions[current_row].height = 16
+    current_row += 1
 
-        # カテゴリヘッダー（空でも出力）
-        current_row += 1  # 空白行
-        ws_pd.merge_cells(f'A{current_row}:B{current_row}')
-        ws_pd[f'A{current_row}']           = config['label']
-        ws_pd[f'A{current_row}'].fill      = config['fill_header']
-        ws_pd[f'A{current_row}'].font      = FONT_WHITE
-        ws_pd[f'A{current_row}'].alignment = Alignment(
-            horizontal='left', vertical='center'
-        )
-        ws_pd[f'A{current_row}'].border    = BORDER_MEDIUM
-        ws_pd.row_dimensions[current_row].height = 22
+    for item in merged_items:
+        drug_names = item['drug_names']
+        text       = item['text']
+
+        drug_cell_val = ('・'.join(drug_names) + '：') if drug_names else ''
+
+        c_drug = ws_pd.cell(row=current_row, column=1)
+        c_drug.value     = drug_cell_val
+        c_drug.fill      = FILL_ROW
+        c_drug.font      = FONT_DRUG
+        c_drug.alignment = Alignment(horizontal='left', vertical='top', wrap_text=True)
+        c_drug.border    = BORDER
+
+        text_clean = text.replace('\r\n', '\n').replace('\r', '\n')
+
+        c_text = ws_pd.cell(row=current_row, column=2)
+        c_text.value     = text_clean
+        c_text.fill      = FILL_ROW
+        c_text.font      = FONT_NORMAL
+        c_text.alignment = Alignment(horizontal='left', vertical='top', wrap_text=True)
+        c_text.border    = BORDER
+
+        line_count = max(text_clean.count('\n') + 1, 1)
+        ws_pd.row_dimensions[current_row].height = max(18, line_count * 15 + 5)
+
         current_row += 1
-
-        if not pd_list:
-            # 該当なし行
-            ws_pd.merge_cells(f'A{current_row}:B{current_row}')
-            ws_pd[f'A{current_row}']           = '（このレジメンには該当する説明文がありません）'
-            ws_pd[f'A{current_row}'].font      = Font(color='999999', italic=True, size=9)
-            ws_pd[f'A{current_row}'].alignment = Alignment(horizontal='left', vertical='center')
-            ws_pd[f'A{current_row}'].border    = BORDER
-            ws_pd.row_dimensions[current_row].height = 16
-            current_row += 1
-            continue
-
-        # 列ヘッダー（薬剤名 | 説明文）
-        for col, label in [(1, '薬剤名'), (2, '説明文')]:
-            c = ws_pd.cell(row=current_row, column=col)
-            c.value     = label
-            c.fill      = PatternFill('solid', fgColor='546E7A')
-            c.font      = Font(color='FFFFFF', bold=True, size=10)
-            c.alignment = Alignment(horizontal='center', vertical='center')
-            c.border    = BORDER
-        ws_pd.row_dimensions[current_row].height = 16
-        current_row += 1
-
-        # 重複統合してデータ行を出力
-        merged_items = merge_pd_items(pd_list)
-
-        for item in merged_items:
-            drug_names = item['drug_names']
-            text       = item['text']
-            fill_row   = config['fill_row']
-
-            # 薬剤名セル
-            # 「ｼｽﾌﾟﾗﾁﾝ・ｶﾙﾎﾞﾌﾟﾗﾁﾝ：」形式
-            if drug_names:
-                drug_cell_val = '・'.join(drug_names) + '：'
-            else:
-                drug_cell_val = ''  # 手動設定・全レジメン共通は空欄
-
-            c_drug = ws_pd.cell(row=current_row, column=1)
-            c_drug.value     = drug_cell_val
-            c_drug.fill      = fill_row
-            c_drug.font      = FONT_DRUG
-            c_drug.alignment = Alignment(
-                horizontal='left', vertical='top', wrap_text=True
-            )
-            c_drug.border    = BORDER
-
-            # 説明文セル（\r\n → 改行対応）
-            text_clean = text.replace('\r\n', '\n').replace('\r', '\n')
-
-            c_text = ws_pd.cell(row=current_row, column=2)
-            c_text.value     = text_clean
-            c_text.fill      = fill_row
-            c_text.font      = FONT_NORMAL
-            c_text.alignment = Alignment(
-                horizontal='left', vertical='top', wrap_text=True
-            )
-            c_text.border    = BORDER
-
-            # 行高さ：説明文の行数に応じて自動調整
-            line_count = max(text_clean.count('\n') + 1, 1)
-            ws_pd.row_dimensions[current_row].height = max(18, line_count * 15 + 5)
-
-            current_row += 1
 
     return ws_pd
 
@@ -1667,7 +1563,7 @@ def create_excel(protocol_no, basic_data, drug_data,
 
     # ===== 追加：Pd欄シートをO欄の次に生成 =====
     if pd_data:
-        build_pd_sheet(wb, protocol_no, basic_data, pd_data, master_data)
+        build_pd_sheet(wb, protocol_no, basic_data, drug_data, master_data, ae_data, pd_data)
 
     # ===== 投与量シール・説明書シート（既存のまま）=====
     ws3 = wb.create_sheet("投与量シール")
