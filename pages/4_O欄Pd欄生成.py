@@ -481,29 +481,35 @@ def build_opd_text(protocol_no, basic_data, drug_data,
     ae_flags = get_ae_flags(protocol_no, drug_data, ae_data)
     has_irae = ae_flags.get("irAE", False)
 
-    basic_row   = next(
-        (b for b in basic_data if b['プロトコールNo'] == protocol_no), {}
-    )
-    pd_cat_raw  = str(basic_row.get('Pdカテゴリ', '')).strip()
-    pd_cat_list = [x.strip() for x in pd_cat_raw.split('|') if x.strip()]
+    # ── 新方式：フラグ名／薬剤名とPdカテゴリ名を完全一致で自動判定 ──
+    cancer_codes = list(dict.fromkeys([
+        str(d.get('管理コード', '')).strip()
+        for d in drug_data
+        if str(d.get('プロトコールNo', '')).strip() == protocol_no
+        and str(d.get('管理コード', '')).strip().startswith('AC')
+    ]))
 
-    pda_list = sorted(
-        [p for p in (pd_data or [])
-         if str(p.get('種別', '')).strip() == 'A'],
-        key=lambda x: int(x['優先順位'])
-        if str(x.get('優先順位', '')).isdigit() else 99
-    )
-    matched_pda = [p for p in pda_list if p['カテゴリID'] in pd_cat_list]
+    drug_names_for_pd = set()
+    for code in cancer_codes:
+        m = next((mm for mm in master_data
+                   if str(mm.get('管理コード','')).strip() == code), {})
+        for key in ('一般名（全角）', '採用商品名（全角）'):
+            nm = str(m.get(key, '')).strip()
+            if nm:
+                drug_names_for_pd.add(nm)
+        d = next((dd for dd in drug_data
+                    if str(dd.get('管理コード','')).strip() == code), {})
+        nm2 = str(d.get('商品名', '')).strip()
+        if nm2:
+            drug_names_for_pd.add(nm2)
 
-    pda007 = next((p for p in (pd_data or []) if p['カテゴリID'] == 'PDA007'), None)
-    if pda007 and ae_flags.get('脱毛', False):
-        if not any(p['カテゴリID'] == 'PDA007' for p in matched_pda):
-            matched_pda.append(pda007)
-            matched_pda = sorted(
-                matched_pda,
-                key=lambda x: int(x['優先順位'])
-                if str(x.get('優先順位', '')).isdigit() else 99
-            )
+    matched_pda = []
+    for p in (pd_data or []):
+        cat_name = str(p.get('カテゴリ名', '')).strip()
+        if not cat_name:
+            continue
+        if ae_flags.get(cat_name, False) or cat_name in drug_names_for_pd:
+            matched_pda.append(p)
 
     lines = []
 
