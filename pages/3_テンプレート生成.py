@@ -232,6 +232,7 @@ def show_ae_register_ui(unregistered, ae_data, master_data, drug_data, basic_dat
             "手足症候群","irAE","口腔粘膜炎","皮膚障害",
             "肝機能障害","腎機能障害","味覚異常","電解質異常",
             "間質性肺炎","心障害","IRR","HBVスクリーニング",
+            "CRS","ICANS",
         ]
 
     # ae_dataをコードで引けるように辞書化
