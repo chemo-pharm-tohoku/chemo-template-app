@@ -2252,14 +2252,14 @@ if selected_basic and result:
         _m    = _mdict.get(_code, {})
         _nh   = to_half_kana(str(_m.get("一般名（全角）","") or _d.get("商品名","")))
         _ds, _us = format_dose_text(_d)
-        _inj_parts.append(f"{_nh} {_ds}{_us}(day: {_d.get('投与Day文字','')})")
+        _inj_parts.append(f"{_nh} {_ds}{_us}({_d.get('投与Day文字','')})")
     _oral_parts = []
     for _d in _support_oral:
         _code = str(_d.get("管理コード",""))
         _m    = _mdict.get(_code, {})
         _nh   = to_half_kana(str(_m.get("一般名（全角）","") or _d.get("商品名","")))
         _ds, _us = format_dose_text(_d)
-        _oral_parts.append(f"{_nh} {_ds}{_us}(day: {_d.get('投与Day文字','')})")
+        _oral_parts.append(f"{_nh} {_ds}{_us}({_d.get('投与Day文字','')})")
     if _inj_parts:
         _o_lines.append(f"支持療法：{'、'.join(_inj_parts)}\t\t\t\t\t")
     if _oral_parts:
