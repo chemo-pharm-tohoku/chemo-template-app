@@ -1055,7 +1055,7 @@ if st.session_state.get("registered"):
         use_container_width=True,
         key="btn_next_text"
     ):
-        st.switch_page("pages/4_O欄Pd欄生成.py")
+        st.switch_page("pages/4_O欄Pd欄パラメーター入力生成.py")
 
     if st.button(
         "📊 テンプレート生成ページへ（Excel生成）",
