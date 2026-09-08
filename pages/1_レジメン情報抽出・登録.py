@@ -728,15 +728,43 @@ def create_pptx(protocol_no, basic_data, drug_data,
 
 # ===== STEP1 =====
 st.subheader("STEP 1　確認票をコピー＆ペースト")
+
+with st.expander("📖 確認票の出し方（クリックで開く）", expanded=False):
+    import os
+    _guide_img_path = "images/confirm_sheet_guide.png"
+    if os.path.exists(_guide_img_path):
+        st.image(_guide_img_path, use_container_width=True)
+    else:
+        st.caption("（画像未設置：images/confirm_sheet_guide.png を配置すると手順画像が表示されます）")
+    st.markdown("""
+    **①** 化学療法確認票マスタ印刷のアイコンをクリック
+    **②** パスコードに「プロトコール番号」を入力し印刷
+    **③** 保存されたエクセルを開く
+    **④** プロトコールの内容（パスコードから下、投与時間を含むZ列迄）をコピーしアプリに貼り付ける
+    """)
+
 st.caption("Excel確認票のセル範囲（パスコード欄〜備考欄まで）を選択してコピーし、下の欄に貼り付けてください")
+
 pasted_text = st.text_area(
     "確認票の内容をここに貼り付け",
     height=300,
     key="pasted_confirm_text",
     placeholder="パスコード：C18-034\tパス名\t大腸癌Pmab+modFOLFOX6療法(外来)\n..."
 )
-if pasted_text.strip():
-    st.success(f"✅ テキストを読み込みました（{len(pasted_text)}文字）")
+
+if st.button("📥 テキストを読み込む", use_container_width=True):
+    if pasted_text.strip():
+        st.session_state["text_loaded"] = True
+        st.session_state["loaded_text"] = pasted_text
+    else:
+        st.session_state["text_loaded"] = False
+        st.warning("⚠️ テキストが貼り付けられていません")
+
+if st.session_state.get("text_loaded") and st.session_state.get("loaded_text", "").strip():
+    st.success(f"✅ テキストを読み込みました（{len(st.session_state['loaded_text'])}文字）")
+else:
+    st.info("👆 確認票を貼り付けてから「テキストを読み込む」を押してください")
+
 st.divider()
 
 # ===== STEP2: AI自動解析 =====
