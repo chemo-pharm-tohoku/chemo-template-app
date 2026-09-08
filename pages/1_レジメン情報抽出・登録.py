@@ -169,25 +169,20 @@ def match_drug_master(product_name_raw, master_data):
                 "matched": False, "candidates": list(hits.keys())}
 
 
-def apply_master_matching(parsed, master_data):
+def apply_business_rules(parsed):
     """
-    Gemini抽出直後のJSONに対し、drug_info各要素のproduct_name
-    （確認票のそのままの表記）を薬品マスタとカタカナ部分一致で検索し、
-    management_code・product_name（統一名称）を確定する。
-    一致しない場合はmanagement_code="要確認"のまま、
-    product_nameは元の表記を保持する（STEP3.5で人間が確認・
-    別名登録できるようにするため）。
+    確認票特有の業務ルールをコード側で補正する。
+    ・remarksに「プライミング用」が含まれ、投与時間が未設定
+      （空欄または「要確認」）の場合、投与時間を5分固定とする
+      （プライミング用生食は院内運用上、常に5分で統一されているため）
     """
     drugs = parsed.get("drug_info") or parsed.get("drugs") or []
     for drug in drugs:
-        raw_name = str(drug.get("product_name") or drug.get("brand_name") or "").strip()
-        if not raw_name:
-            continue
-        result = match_drug_master(raw_name, master_data)
-        drug["management_code"] = result["management_code"]
-        drug["product_name"]    = result["product_name"]
-        if not result["matched"] and result["candidates"]:
-            drug["_match_candidates"] = result["candidates"]
+        remarks   = str(drug.get("remarks", "") or "")
+        time_text = str(drug.get("admin_time_text", "") or "").strip()
+        if "プライミング用" in remarks and (not time_text or time_text == "要確認"):
+            drug["admin_time_text"]    = "5分"
+            drug["admin_time_numeric"] = 0.0833
     if "drug_info" in parsed:
         parsed["drug_info"] = drugs
     else:
