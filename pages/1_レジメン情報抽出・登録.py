@@ -99,8 +99,6 @@ def normalize_kana_for_match(text):
     """
     マッチング用に文字列を正規化する。
     全角カタカナ→半角カタカナに変換し、大文字化する。
-    漢字・ひらがな・数字・記号はそのまま残す
-    （置換しても文字順序は保たれるため、部分一致判定に影響しない）。
     """
     return to_half_kana(str(text)).upper()
 
@@ -109,22 +107,6 @@ def match_drug_master(product_name_raw, master_data):
     """
     確認票の商品名表記(product_name_raw)を、薬品マスタの
     各名称列と部分一致で検索する。
-    漢字表記（生理食塩液・レボホリナート等）にも対応するため、
-    全角列（採用商品名・一般名）と半角カナ列の両方を検索対象とする。
-
-    検索対象列（優先順位順）：
-      1. 採用商品名（全角）
-      2. 一般名（全角）
-      3. 採用商品名（半角カナ）
-      4. 一般名（半角カナ）
-      5. 別名・旧採用品名（全角、カンマ区切り）
-
-    戻り値: dict {
-        "management_code": str,
-        "product_name"    : str,
-        "matched"         : bool,
-        "candidates"      : list,
-    }
     """
     raw_norm = normalize_kana_for_match(product_name_raw)
     hits = {}
@@ -169,12 +151,34 @@ def match_drug_master(product_name_raw, master_data):
                 "matched": False, "candidates": list(hits.keys())}
 
 
+def apply_master_matching(parsed, master_data):
+    """
+    Gemini抽出直後のJSONに対し、drug_info各要素のproduct_name
+    を薬品マスタと部分一致で検索し、management_code・product_name
+    （統一名称）を確定する。
+    """
+    drugs = parsed.get("drug_info") or parsed.get("drugs") or []
+    for drug in drugs:
+        raw_name = str(drug.get("product_name") or drug.get("brand_name") or "").strip()
+        if not raw_name:
+            continue
+        result = match_drug_master(raw_name, master_data)
+        drug["management_code"] = result["management_code"]
+        drug["product_name"]    = result["product_name"]
+        if not result["matched"] and result["candidates"]:
+            drug["_match_candidates"] = result["candidates"]
+    if "drug_info" in parsed:
+        parsed["drug_info"] = drugs
+    else:
+        parsed["drugs"] = drugs
+    return parsed
+
+
 def apply_business_rules(parsed):
     """
     確認票特有の業務ルールをコード側で補正する。
     ・remarksに「プライミング用」が含まれ、投与時間が未設定
-      （空欄または「要確認」）の場合、投与時間を5分固定とする
-      （プライミング用生食は院内運用上、常に5分で統一されているため）
+      の場合、投与時間を5分固定とする
     """
     drugs = parsed.get("drug_info") or parsed.get("drugs") or []
     for drug in drugs:
