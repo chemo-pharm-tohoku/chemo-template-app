@@ -772,7 +772,7 @@ st.divider()
 
 # ===== STEP2: AI自動解析 =====
 st.subheader("STEP 2　AIが自動解析")
-if pasted_text.strip():
+if st.session_state.get("text_loaded") and st.session_state.get("loaded_text", "").strip():
     if st.button("🤖 自動解析スタート", type="primary", use_container_width=True):
         with st.spinner("AIが解析中です...少々お待ちください⏳"):
             try:
@@ -780,7 +780,7 @@ if pasted_text.strip():
                 client     = get_gemini_client()
                 response   = client.models.generate_content(
                     model="gemini-2.5-flash",
-                    contents=[definition, pasted_text]
+                    contents=[definition, st.session_state["loaded_text"]]
                 )
                 raw   = response.text
                 match = re.search(r"\{.*\}", raw, re.DOTALL)
@@ -788,7 +788,6 @@ if pasted_text.strip():
                     json_str = match.group()
                     parsed   = json.loads(json_str)
 
-                    # 薬品マスタとのカタカナ部分一致マッチングを適用
                     master_data, _ = load_master_data()
                     parsed = apply_master_matching(parsed, master_data)
 
@@ -798,10 +797,6 @@ if pasted_text.strip():
                     st.session_state["extracted_parsed"] = parsed
                     st.session_state["json_editor_sync"] = True
                     st.session_state.pop("registered", None)
-                    st.session_state.pop("yonin_confirmed_1", None)
-                    for _k in list(st.session_state.keys()):
-                        if _k.startswith("step35_"):
-                            del st.session_state[_k]
                     st.success("✅ 解析完了！")
                 else:
                     st.error("JSONの抽出に失敗しました。もう一度試してください。")
@@ -809,7 +804,7 @@ if pasted_text.strip():
             except Exception as e:
                 st.error(f"エラーが発生しました: {e}")
 else:
-    st.info("👆 まず確認票のテキストを貼り付けてください")
+    st.info("👆 STEP1でテキストを読み込んでください")
 st.divider()
 
 # ===== STEP3: 内容確認 =====
@@ -868,181 +863,7 @@ else:
     st.info("👆 STEP2で解析すると結果がここに表示されます")
 st.divider()
 
-# ===== STEP3.5: 要確認項目の解決 =====
-st.subheader("STEP 3.5　要確認項目の入力")
 
-if "extracted_parsed" in st.session_state and not st.session_state.get("registered"):
-    import re as _re35
-
-    def _parse_time_hours_35(text):
-        text = str(text).strip()
-        h = _re35.search(r"(\d+)\s*時間", text)
-        m = _re35.search(r"(\d+)\s*分",   text)
-        hours   = int(h.group(1)) if h else 0
-        minutes = int(m.group(1)) if m else 0
-        return hours + minutes / 60
-
-    _parsed35 = st.session_state["extracted_parsed"]
-    _drugs35  = _parsed35.get("drug_info") or _parsed35.get("drugs") or []
-    _basic35  = _parsed35.get("basic_info", {})
-
-    YONIN_DEF = [
-        ("admin_time_text",   "投与時間",    "例：30分・1時間・2時間"),
-        ("admin_day_text",    "投与Day",     "例：day1・day1,8,15"),
-        ("admin_day_numeric", "投与Day数値", "例：1・1|8|15"),
-        ("diluent_volume",    "希釈液容量",  "例：250"),
-        ("management_code",   "管理コード",  "例：AC001（薬品マスタで確認して入力）"),
-        ("dosage_value",      "投与量数値",  "例：100"),
-    ]
-    YONIN_BASIC = [
-        ("course_days", "1コース日数",    "例：21・28"),
-        ("protocol_no", "プロトコールNo", "例：C34-001"),
-    ]
-
-    _yonin_basic_items = []
-    for _k, _label, _placeholder in YONIN_BASIC:
-        _val = str(_basic35.get(_k, "")).strip()
-        if _val == "要確認":
-            _yonin_basic_items.append({
-                "key"        : f"step35_basic_{_k}",
-                "json_key"   : _k,
-                "label"      : f"基本情報 / {_label}",
-                "placeholder": _placeholder,
-            })
-
-    _yonin_drug_items = []
-    for _di, _d in enumerate(_drugs35):
-        _dname = str(
-            _d.get("product_name") or _d.get("brand_name") or
-            _d.get("management_code") or f"薬剤{_di+1}"
-        ).strip()
-        for _k, _label, _placeholder in YONIN_DEF:
-            _val = str(_d.get(_k, "") or "").strip()
-            if _val == "要確認":
-                _hint = ""
-                if _k == "management_code":
-                    _cands = _d.get("_match_candidates")
-                    if _cands:
-                        _hint = f"（候補：{', '.join(_cands)}）"
-                _yonin_drug_items.append({
-                    "key"        : f"step35_drug_{_di}_{_k}",
-                    "drug_idx"   : _di,
-                    "drug_name"  : _dname,
-                    "json_key"   : _k,
-                    "label"      : f"{_dname} / {_label}{_hint}",
-                    "placeholder": _placeholder,
-                })
-
-    _all_yonin = _yonin_basic_items + _yonin_drug_items
-
-    if not _all_yonin:
-        st.success("✅ 要確認項目はありません。STEP4へ進んでください。")
-    else:
-        st.warning(f"⚠️ {len(_all_yonin)} 件の要確認項目があります。入力してから登録してください。")
-        st.caption("未入力のままでも登録できますが、スプレッドシートに要確認が残ります。")
-
-        _all_filled = True
-        for _item in _all_yonin:
-            _inp = st.text_input(
-                _item["label"],
-                placeholder=_item["placeholder"],
-                key=_item["key"],
-            )
-            if not _inp.strip():
-                _all_filled = False
-
-            if _item["json_key"] == "management_code":
-                st.checkbox(
-                    f"「{_item['drug_name']}」を薬品マスタの別名として登録する",
-                    key=_item["key"] + "_register_alias",
-                )
-
-        st.divider()
-        col_fix, col_skip = st.columns(2)
-
-        with col_fix:
-            if st.button(
-                "✅ 入力内容をJSONに反映してSTEP4へ",
-                type="primary",
-                use_container_width=True,
-                key="btn_step35_fix",
-                disabled=not _all_filled
-            ):
-                import copy
-                _parsed_new = copy.deepcopy(_parsed35)
-                _basic_new  = _parsed_new.get("basic_info", {})
-                _drugs_new  = (
-                    _parsed_new.get("drug_info") or
-                    _parsed_new.get("drugs") or []
-                )
-                for _item in _yonin_basic_items:
-                    _v = st.session_state.get(_item["key"], "").strip()
-                    if _v:
-                        _k = _item["json_key"]
-                        if _k == "course_days":
-                            try:
-                                _basic_new[_k] = int(_v)
-                            except:
-                                _basic_new[_k] = _v
-                        else:
-                            _basic_new[_k] = _v
-                for _item in _yonin_drug_items:
-                    _v = st.session_state.get(_item["key"], "").strip()
-                    if _v:
-                        _di = _item["drug_idx"]
-                        _k  = _item["json_key"]
-                        if _di < len(_drugs_new):
-                            if _k == "admin_time_text":
-                                _drugs_new[_di][_k] = _v
-                                _drugs_new[_di]["admin_time_numeric"] = round(
-                                    _parse_time_hours_35(_v), 4
-                                )
-                            elif _k == "diluent_volume":
-                                try:
-                                    _drugs_new[_di][_k] = float(_v)
-                                except:
-                                    _drugs_new[_di][_k] = _v
-                            elif _k == "management_code":
-                                _drugs_new[_di][_k] = _v
-                                _drugs_new[_di].pop("_match_candidates", None)
-                                _alias_key = _item["key"] + "_register_alias"
-                                if st.session_state.get(_alias_key):
-                                    _ok, _msg = add_alias_to_master(_v, _item["drug_name"])
-                                    if _ok:
-                                        st.toast(f"✅ {_msg}")
-                                    else:
-                                        st.warning(f"⚠️ {_msg}")
-                            else:
-                                _drugs_new[_di][_k] = _v
-
-                _parsed_new["basic_info"] = _basic_new
-                if "drug_info" in _parsed_new:
-                    _parsed_new["drug_info"] = _drugs_new
-                else:
-                    _parsed_new["drugs"] = _drugs_new
-
-                st.session_state["extracted_parsed"] = _parsed_new
-                st.session_state["extracted_json"]   = json.dumps(
-                    _parsed_new, ensure_ascii=False, indent=2
-                )
-                for _item in _all_yonin:
-                    st.session_state.pop(_item["key"], None)
-                    st.session_state.pop(_item["key"] + "_register_alias", None)
-                st.success("✅ JSONに反映しました。STEP4で登録してください。")
-                st.rerun()
-
-        with col_skip:
-            if st.button(
-                "⏭️ このままSTEP4へ（要確認を残す）",
-                use_container_width=True,
-                key="btn_step35_skip"
-            ):
-                st.rerun()
-
-else:
-    if not st.session_state.get("registered"):
-        st.info("👆 STEP2で解析すると要確認項目が表示されます")
-st.divider()
 
 # ===== STEP4: 登録 =====
 st.subheader("STEP 4　スプレッドシートに登録")
@@ -1143,10 +964,13 @@ if "extracted_parsed" in st.session_state and not st.session_state.get("register
 
 elif st.session_state.get("registered"):
     st.success(f"✅ {st.session_state.get('registered_protocol','')} 登録済み")
+    st.markdown(f"### 📊 [スプレッドシートを開く]({st.secrets['spreadsheet']['url']})")
+    st.info(
+        "「要確認」となっている項目があれば、スプレッドシートの「薬剤情報」シートを開いて"
+        "直接修正してください（管理コード・投与量・投与時間等）。"
+    )
 else:
     st.info("👆 STEP3で内容を確認してから登録してください")
-
-st.divider()
 
 # ===== STEP5: パワポ生成 =====
 st.subheader("STEP 5　（外来化療）スケジュールシール パワポ生成")
