@@ -16,7 +16,7 @@ from datetime import date, datetime
 today_str = date.today().strftime("%Y%m%d")
 
 st.title("📋 レジメン情報抽出・登録")
-st.caption("PDFをアップロードしてAIが自動解析→スプレッドシートに登録→パワポ生成まで一気通貫")
+st.caption("確認票のテキストを貼り付けてAIが自動解析→スプレッドシートに登録→パワポ生成まで一気通貫")
 st.divider()
 
 # ===== 認証・初期化 =====
@@ -94,6 +94,136 @@ def to_half_kana(text):
     for char in str(text):
         result += table.get(char, char)
     return result
+
+def normalize_kana_for_match(text):
+    """
+    マッチング用に文字列を正規化する。
+    全角カタカナ→半角カタカナに変換し、大文字化する。
+    漢字・ひらがな・数字・記号はそのまま残す
+    （置換しても文字順序は保たれるため、部分一致判定に影響しない）。
+    """
+    return to_half_kana(str(text)).upper()
+
+
+def match_drug_master(product_name_raw, master_data):
+    """
+    確認票の商品名表記(product_name_raw)を、薬品マスタの
+    各名称列と「カタカナ部分一致」で検索する。
+    完全一致ではなく「マスタの名称が、確認票の表記の中に
+    部分文字列として含まれているか」で判定する。
+
+    検索対象列（優先順位順）：
+      1. 採用商品名（半角カナ）
+      2. 一般名（半角カナ）
+      3. 別名・旧採用品名（全角、カンマ区切り）
+
+    戻り値: dict {
+        "management_code": str,   # 一致すれば管理コード、複数候補/不一致は"要確認"
+        "product_name"    : str,  # 一致すれば採用商品名（全角）、不一致は元の表記
+        "matched"         : bool,
+        "candidates"      : list, # 複数ヒット時の管理コード一覧（ヒント表示用）
+    }
+    """
+    raw_norm = normalize_kana_for_match(product_name_raw)
+    hits = {}  # management_code -> 採用商品名（全角）
+
+    for row in master_data:
+        code = str(row.get("管理コード", "")).strip()
+        if not code:
+            continue
+
+        brand_kana   = str(row.get("採用商品名（半角カナ）", "")).strip()
+        generic_kana = str(row.get("一般名（半角カナ）", "")).strip()
+        brand_full   = str(row.get("採用商品名（全角）", "")).strip()
+
+        matched_here = False
+        if brand_kana and normalize_kana_for_match(brand_kana) in raw_norm:
+            matched_here = True
+        elif generic_kana and normalize_kana_for_match(generic_kana) in raw_norm:
+            matched_here = True
+
+        if not matched_here:
+            alias_str = str(row.get("別名・旧採用品名", "")).strip()
+            if alias_str:
+                for alias in alias_str.split(","):
+                    alias = alias.strip()
+                    if alias and normalize_kana_for_match(alias) in raw_norm:
+                        matched_here = True
+                        break
+
+        if matched_here:
+            hits[code] = brand_full
+
+    if len(hits) == 1:
+        code, name = next(iter(hits.items()))
+        return {"management_code": code, "product_name": name,
+                "matched": True, "candidates": [code]}
+    elif len(hits) == 0:
+        return {"management_code": "要確認", "product_name": str(product_name_raw).strip(),
+                "matched": False, "candidates": []}
+    else:
+        return {"management_code": "要確認", "product_name": str(product_name_raw).strip(),
+                "matched": False, "candidates": list(hits.keys())}
+
+
+def apply_master_matching(parsed, master_data):
+    """
+    Gemini抽出直後のJSONに対し、drug_info各要素のproduct_name
+    （確認票のそのままの表記）を薬品マスタとカタカナ部分一致で検索し、
+    management_code・product_name（統一名称）を確定する。
+    一致しない場合はmanagement_code="要確認"のまま、
+    product_nameは元の表記を保持する（STEP3.5で人間が確認・
+    別名登録できるようにするため）。
+    """
+    drugs = parsed.get("drug_info") or parsed.get("drugs") or []
+    for drug in drugs:
+        raw_name = str(drug.get("product_name") or drug.get("brand_name") or "").strip()
+        if not raw_name:
+            continue
+        result = match_drug_master(raw_name, master_data)
+        drug["management_code"] = result["management_code"]
+        drug["product_name"]    = result["product_name"]
+        if not result["matched"] and result["candidates"]:
+            drug["_match_candidates"] = result["candidates"]
+    if "drug_info" in parsed:
+        parsed["drug_info"] = drugs
+    else:
+        parsed["drugs"] = drugs
+    return parsed
+
+
+def add_alias_to_master(management_code, alias_text):
+    """
+    薬品マスタシートの該当管理コード行の「別名・旧採用品名」列に、
+    新しい別名をカンマ区切りで追記する。
+    """
+    sh = get_spreadsheet()
+    ws = sh.worksheet("薬品マスタ")
+    headers = ws.row_values(1)
+    try:
+        code_col  = headers.index("管理コード") + 1
+        alias_col = headers.index("別名・旧採用品名") + 1
+    except ValueError:
+        return False, "薬品マスタのヘッダーに必要な列が見つかりません"
+
+    all_values = ws.get_all_values()
+    target_row = None
+    for i, row in enumerate(all_values[1:], start=2):
+        if len(row) >= code_col and row[code_col-1].strip() == str(management_code).strip():
+            target_row = i
+            break
+    if target_row is None:
+        return False, f"管理コード {management_code} が薬品マスタに見つかりません"
+
+    current_alias = ws.cell(target_row, alias_col).value or ""
+    existing_list  = [a.strip() for a in current_alias.split(",") if a.strip()]
+    alias_text = str(alias_text).strip()
+    if alias_text and alias_text not in existing_list:
+        existing_list.append(alias_text)
+        ws.update_cell(target_row, alias_col, ",".join(existing_list))
+        load_master_data.clear()
+        return True, f"「{alias_text}」を {management_code} の別名に追加しました"
+    return True, "既に登録済みでした"
 
 def shorten_regimen_name(regimen_name):
     name = regimen_name
@@ -597,43 +727,47 @@ def create_pptx(protocol_no, basic_data, drug_data,
 
 
 # ===== STEP1 =====
-st.subheader("STEP 1　レジメンPDFをアップロード")
-uploaded = st.file_uploader(
-    "PDFファイルをここにドロップ",
-    type="pdf",
-    help="レジメン情報PDFを1件アップロードしてください"
+st.subheader("STEP 1　確認票をコピー＆ペースト")
+st.caption("Excel確認票のセル範囲（パスコード欄〜備考欄まで）を選択してコピーし、下の欄に貼り付けてください")
+pasted_text = st.text_area(
+    "確認票の内容をここに貼り付け",
+    height=300,
+    key="pasted_confirm_text",
+    placeholder="パスコード：C18-034\tパス名\t大腸癌Pmab+modFOLFOX6療法(外来)\n..."
 )
-if uploaded:
-    st.success(f"✅ {uploaded.name} を読み込みました")
+if pasted_text.strip():
+    st.success(f"✅ テキストを読み込みました（{len(pasted_text)}文字）")
 st.divider()
 
 # ===== STEP2: AI自動解析 =====
 st.subheader("STEP 2　AIが自動解析")
-if uploaded:
+if pasted_text.strip():
     if st.button("🤖 自動解析スタート", type="primary", use_container_width=True):
         with st.spinner("AIが解析中です...少々お待ちください⏳"):
             try:
                 definition = load_definition()
-                pdf_bytes  = uploaded.read()
                 client     = get_gemini_client()
                 response   = client.models.generate_content(
                     model="gemini-2.5-flash",
-                    contents=[
-                        definition,
-                        types.Part.from_bytes(mime_type="application/pdf", data=pdf_bytes)
-                    ]
+                    contents=[definition, pasted_text]
                 )
                 raw   = response.text
                 match = re.search(r"\{.*\}", raw, re.DOTALL)
                 if match:
                     json_str = match.group()
                     parsed   = json.loads(json_str)
-                    st.session_state["extracted_json"]   = json_str
+
+                    # 薬品マスタとのカタカナ部分一致マッチングを適用
+                    master_data, _ = load_master_data()
+                    parsed = apply_master_matching(parsed, master_data)
+
+                    st.session_state["extracted_json"]   = json.dumps(
+                        parsed, ensure_ascii=False, indent=2
+                    )
                     st.session_state["extracted_parsed"] = parsed
                     st.session_state["json_editor_sync"] = True
                     st.session_state.pop("registered", None)
                     st.session_state.pop("yonin_confirmed_1", None)
-                    # STEP3.5のキーもリセット
                     for _k in list(st.session_state.keys()):
                         if _k.startswith("step35_"):
                             del st.session_state[_k]
@@ -644,7 +778,7 @@ if uploaded:
             except Exception as e:
                 st.error(f"エラーが発生しました: {e}")
 else:
-    st.info("👆 まずPDFをアップロードしてください")
+    st.info("👆 まず確認票のテキストを貼り付けてください")
 st.divider()
 
 # ===== STEP3: 内容確認 =====
@@ -692,7 +826,6 @@ if "extracted_parsed" in st.session_state:
                 st.session_state["extracted_parsed"] = _parsed_new
                 st.session_state.pop("yonin_confirmed_1", None)
                 st.session_state.pop("json_editor_text", None)
-                # STEP3.5のキーもリセット
                 for _k in list(st.session_state.keys()):
                     if _k.startswith("step35_"):
                         del st.session_state[_k]
@@ -727,7 +860,7 @@ if "extracted_parsed" in st.session_state and not st.session_state.get("register
         ("admin_day_text",    "投与Day",     "例：day1・day1,8,15"),
         ("admin_day_numeric", "投与Day数値", "例：1・1|8|15"),
         ("diluent_volume",    "希釈液容量",  "例：250"),
-        ("management_code",   "管理コード",  "例：AC001"),
+        ("management_code",   "管理コード",  "例：AC001（薬品マスタで確認して入力）"),
         ("dosage_value",      "投与量数値",  "例：100"),
     ]
     YONIN_BASIC = [
@@ -755,12 +888,17 @@ if "extracted_parsed" in st.session_state and not st.session_state.get("register
         for _k, _label, _placeholder in YONIN_DEF:
             _val = str(_d.get(_k, "") or "").strip()
             if _val == "要確認":
+                _hint = ""
+                if _k == "management_code":
+                    _cands = _d.get("_match_candidates")
+                    if _cands:
+                        _hint = f"（候補：{', '.join(_cands)}）"
                 _yonin_drug_items.append({
                     "key"        : f"step35_drug_{_di}_{_k}",
                     "drug_idx"   : _di,
                     "drug_name"  : _dname,
                     "json_key"   : _k,
-                    "label"      : f"{_dname} / {_label}",
+                    "label"      : f"{_dname} / {_label}{_hint}",
                     "placeholder": _placeholder,
                 })
 
@@ -781,6 +919,12 @@ if "extracted_parsed" in st.session_state and not st.session_state.get("register
             )
             if not _inp.strip():
                 _all_filled = False
+
+            if _item["json_key"] == "management_code":
+                st.checkbox(
+                    f"「{_item['drug_name']}」を薬品マスタの別名として登録する",
+                    key=_item["key"] + "_register_alias",
+                )
 
         st.divider()
         col_fix, col_skip = st.columns(2)
@@ -827,6 +971,16 @@ if "extracted_parsed" in st.session_state and not st.session_state.get("register
                                     _drugs_new[_di][_k] = float(_v)
                                 except:
                                     _drugs_new[_di][_k] = _v
+                            elif _k == "management_code":
+                                _drugs_new[_di][_k] = _v
+                                _drugs_new[_di].pop("_match_candidates", None)
+                                _alias_key = _item["key"] + "_register_alias"
+                                if st.session_state.get(_alias_key):
+                                    _ok, _msg = add_alias_to_master(_v, _item["drug_name"])
+                                    if _ok:
+                                        st.toast(f"✅ {_msg}")
+                                    else:
+                                        st.warning(f"⚠️ {_msg}")
                             else:
                                 _drugs_new[_di][_k] = _v
 
@@ -842,6 +996,7 @@ if "extracted_parsed" in st.session_state and not st.session_state.get("register
                 )
                 for _item in _all_yonin:
                     st.session_state.pop(_item["key"], None)
+                    st.session_state.pop(_item["key"] + "_register_alias", None)
                 st.success("✅ JSONに反映しました。STEP4で登録してください。")
                 st.rerun()
 
@@ -940,51 +1095,6 @@ if "extracted_parsed" in st.session_state and not st.session_state.get("register
                             get_val(drug,"remarks","note"),
                         ]
                         ws_drug.append_row(drug_row, value_input_option="USER_ENTERED")
-
-                    # Pdカテゴリ自動設定
-                    try:
-                        ws_ae    = sh.worksheet("抗がん剤副作用マスタ")
-                        ws_pd_sh = sh.worksheet("Pd")
-                        ae_data  = ws_ae.get_all_records()
-                        pd_data  = ws_pd_sh.get_all_records()
-                        trigger_to_pdid = {}
-                        code_to_pdid    = {}
-                        priority_dict   = {}
-                        for p in pd_data:
-                            trigger = str(p.get('トリガーキーワード','')).strip()
-                            cat_id  = str(p.get('カテゴリID','')).strip()
-                            try: priority_dict[cat_id] = int(p.get('優先順位',99))
-                            except: priority_dict[cat_id] = 99
-                            if not trigger or trigger == '手動設定': continue
-                            if trigger.startswith('AC'):
-                                for c in trigger.split('|'):
-                                    code_to_pdid[c.strip()] = cat_id
-                            else:
-                                if trigger not in trigger_to_pdid:
-                                    trigger_to_pdid[trigger] = []
-                                trigger_to_pdid[trigger].append(cat_id)
-                        ae_dict    = {str(r['管理コード']).strip(): r for r in ae_data}
-                        ae_headers = ws_ae.row_values(1)
-                        ae_columns = ae_headers[2:]
-                        collected  = set()
-                        for drug in drugs:
-                            drug_code = str(get_val(drug,'management_code')).strip()
-                            ae_row    = ae_dict.get(drug_code)
-                            if ae_row:
-                                for col in ae_columns:
-                                    if str(ae_row.get(col,'')).strip() == '○':
-                                        for pid in trigger_to_pdid.get(col,[]):
-                                            collected.add(pid)
-                            if drug_code in code_to_pdid:
-                                collected.add(code_to_pdid[drug_code])
-                        sorted_ids  = sorted(collected, key=lambda x: priority_dict.get(x,99))
-                        pd_category = '|'.join(sorted_ids)
-                        if pd_category:
-                            existing3 = ws_basic.col_values(1)
-                            if protocol_no in existing3:
-                                ws_basic.update_cell(existing3.index(protocol_no)+1, 12, pd_category)
-                    except Exception as pd_e:
-                        st.warning(f"⚠️ Pdカテゴリ自動設定エラー: {pd_e}")
 
                     ws_log.append_row([
                         now, protocol_no, regimen_name,
