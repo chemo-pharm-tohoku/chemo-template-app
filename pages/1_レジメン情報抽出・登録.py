@@ -729,7 +729,7 @@ st.subheader("STEP 1　確認票をコピー＆ペースト")
 
 with st.expander("📖 確認票の出し方（クリックで開く）", expanded=False):
     import os
-    _guide_img_path = "images/confirm_sheet_guide.png"
+    _guide_img_path = "images/化学療法確認票取込方法.jpg"
     if os.path.exists(_guide_img_path):
         st.image(_guide_img_path, use_container_width=True)
     else:
@@ -785,6 +785,7 @@ if st.session_state.get("text_loaded") and st.session_state.get("loaded_text", "
 
                     master_data, _ = load_master_data()
                     parsed = apply_master_matching(parsed, master_data)
+                    parsed = apply_business_rules(parsed)
 
                     st.session_state["extracted_json"]   = json.dumps(
                         parsed, ensure_ascii=False, indent=2
@@ -1028,6 +1029,7 @@ if st.session_state.get("registered"):
             "registered", "registered_protocol",
             "yonin_confirmed_1",
             "json_editor_text", "json_editor_sync",
+            "text_loaded", "loaded_text",
         ]:
             st.session_state.pop(key, None)
         for key in list(st.session_state.keys()):
