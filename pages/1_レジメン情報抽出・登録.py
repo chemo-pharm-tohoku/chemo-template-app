@@ -773,7 +773,7 @@ if st.session_state.get("text_loaded") and st.session_state.get("loaded_text", "
             try:
                 definition = load_definition()
                 client     = get_gemini_client()
-                 response   = client.models.generate_content(
+                response   = client.models.generate_content(
                     model="gemini-2.5-flash",
                     contents=[definition, st.session_state["loaded_text"]],
                     config=types.GenerateContentConfig(
