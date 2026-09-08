@@ -57,14 +57,14 @@ with col_l:
 
 with col_r:
     with st.container(border=True):
-        st.markdown("#### 📋 個人テキスト生成")
+        st.markdown("#### 📋 個人パラメーター入力生成")
         st.write(
             "登録済みレジメンからパラメータを入力し "
             "O欄・Pd欄のテキストを生成。\n"
             "コピーしてファーマロードに直接貼り付けできる。"
         )
         if st.button(
-            "📋 テキスト生成へ",
+            "📋 パラメーター入力生成へ",
             type="primary",
             use_container_width=True,
             key="btn_top_4"
