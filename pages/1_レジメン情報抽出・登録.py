@@ -174,11 +174,42 @@ def apply_master_matching(parsed, master_data):
     return parsed
 
 
+def normalize_day_fields(raw_text):
+    """
+    確認票のday表記（グリッド形式・シンプル形式問わず）から
+    実際の投与日（数字）だけを抽出し、
+    admin_day_text（"day: 1,8,15"形式）と
+    admin_day_numeric（"1|8|15"または"1-3"形式）を再構築する。
+    """
+    import re
+    numbers = sorted(set(int(n) for n in re.findall(r'\d+', str(raw_text))))
+    if not numbers:
+        return str(raw_text), ""
+
+    day_text = "day: " + ",".join(str(n) for n in numbers)
+
+    ranges = []
+    start = prev = numbers[0]
+    for n in numbers[1:]:
+        if n == prev + 1:
+            prev = n
+            continue
+        ranges.append((start, prev))
+        start = prev = n
+    ranges.append((start, prev))
+    numeric_parts = [str(s) if s == e else f"{s}-{e}" for s, e in ranges]
+    day_numeric = "|".join(numeric_parts)
+
+    return day_text, day_numeric
+
+
 def apply_business_rules(parsed):
     """
     確認票特有の業務ルールをコード側で補正する。
     ・remarksに「プライミング用」が含まれ、投与時間が未設定
       の場合、投与時間を5分固定とする
+    ・admin_day_text／admin_day_numericを、グリッド形式等の
+      表記ゆらぎに関わらずクリーンな形式に正規化する
     """
     drugs = parsed.get("drug_info") or parsed.get("drugs") or []
     for drug in drugs:
@@ -187,12 +218,19 @@ def apply_business_rules(parsed):
         if "プライミング用" in remarks and (not time_text or time_text == "要確認"):
             drug["admin_time_text"]    = "5分"
             drug["admin_time_numeric"] = 0.0833
+
+        raw_day = drug.get("admin_day_text", "")
+        if raw_day and raw_day != "要確認":
+            new_text, new_numeric = normalize_day_fields(raw_day)
+            drug["admin_day_text"] = new_text
+            if new_numeric:
+                drug["admin_day_numeric"] = new_numeric
+
     if "drug_info" in parsed:
         parsed["drug_info"] = drugs
     else:
         parsed["drugs"] = drugs
     return parsed
-
 
 def add_alias_to_master(management_code, alias_text):
     """
