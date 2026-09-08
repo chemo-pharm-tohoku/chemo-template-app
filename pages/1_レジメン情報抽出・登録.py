@@ -729,7 +729,7 @@ st.subheader("STEP 1　確認票をコピー＆ペースト")
 
 with st.expander("📖 確認票の出し方（クリックで開く）", expanded=False):
     import os
-    _guide_img_path = "images/化学療法確認票取込方法.jpg"
+    _guide_img_path = "化学療法確認票取込方法.jpg"
     if os.path.exists(_guide_img_path):
         st.image(_guide_img_path, use_container_width=True)
     else:
