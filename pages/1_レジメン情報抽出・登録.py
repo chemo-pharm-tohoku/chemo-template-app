@@ -108,46 +108,49 @@ def normalize_kana_for_match(text):
 def match_drug_master(product_name_raw, master_data):
     """
     確認票の商品名表記(product_name_raw)を、薬品マスタの
-    各名称列と「カタカナ部分一致」で検索する。
-    完全一致ではなく「マスタの名称が、確認票の表記の中に
-    部分文字列として含まれているか」で判定する。
+    各名称列と部分一致で検索する。
+    漢字表記（生理食塩液・レボホリナート等）にも対応するため、
+    全角列（採用商品名・一般名）と半角カナ列の両方を検索対象とする。
 
     検索対象列（優先順位順）：
-      1. 採用商品名（半角カナ）
-      2. 一般名（半角カナ）
-      3. 別名・旧採用品名（全角、カンマ区切り）
+      1. 採用商品名（全角）
+      2. 一般名（全角）
+      3. 採用商品名（半角カナ）
+      4. 一般名（半角カナ）
+      5. 別名・旧採用品名（全角、カンマ区切り）
 
     戻り値: dict {
-        "management_code": str,   # 一致すれば管理コード、複数候補/不一致は"要確認"
-        "product_name"    : str,  # 一致すれば採用商品名（全角）、不一致は元の表記
+        "management_code": str,
+        "product_name"    : str,
         "matched"         : bool,
-        "candidates"      : list, # 複数ヒット時の管理コード一覧（ヒント表示用）
+        "candidates"      : list,
     }
     """
     raw_norm = normalize_kana_for_match(product_name_raw)
-    hits = {}  # management_code -> 採用商品名（全角）
+    hits = {}
 
     for row in master_data:
         code = str(row.get("管理コード", "")).strip()
         if not code:
             continue
 
+        brand_full   = str(row.get("採用商品名（全角）", "")).strip()
+        generic_full = str(row.get("一般名（全角）", "")).strip()
         brand_kana   = str(row.get("採用商品名（半角カナ）", "")).strip()
         generic_kana = str(row.get("一般名（半角カナ）", "")).strip()
-        brand_full   = str(row.get("採用商品名（全角）", "")).strip()
 
         matched_here = False
-        if brand_kana and normalize_kana_for_match(brand_kana) in raw_norm:
-            matched_here = True
-        elif generic_kana and normalize_kana_for_match(generic_kana) in raw_norm:
-            matched_here = True
+        for candidate in (brand_full, generic_full, brand_kana, generic_kana):
+            if candidate and len(candidate) >= 2 and normalize_kana_for_match(candidate) in raw_norm:
+                matched_here = True
+                break
 
         if not matched_here:
             alias_str = str(row.get("別名・旧採用品名", "")).strip()
             if alias_str:
                 for alias in alias_str.split(","):
                     alias = alias.strip()
-                    if alias and normalize_kana_for_match(alias) in raw_norm:
+                    if alias and len(alias) >= 2 and normalize_kana_for_match(alias) in raw_norm:
                         matched_here = True
                         break
 
