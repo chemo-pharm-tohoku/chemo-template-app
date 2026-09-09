@@ -483,6 +483,170 @@ def show_ae_register_ui(unregistered, ae_data, master_data, drug_data, basic_dat
             st.rerun()
 
 
+def diagnose_pd_ae_alignment(pd_data, ae_data, master_data):
+    """
+    Pdシートのカテゴリと、抗がん剤副作用マスタの列名・薬品マスタの薬剤名を比較し、
+    各カテゴリを「症状系（マッチ済み）」「薬剤名系（マッチ済み）」「未対応」に分類する。
+    """
+    if ae_data:
+        all_keys = list(ae_data[0].keys())
+    else:
+        all_keys = []
+    excluded = {"管理コード", "一般名（全角）", "出典", "登録日"}
+    ae_columns = [k for k in all_keys if k not in excluded]
+
+    drug_names = set()
+    for m in master_data:
+        for key in ("一般名（全角）", "採用商品名（全角）"):
+            v = str(m.get(key, "")).strip()
+            if v:
+                drug_names.add(v)
+
+    result = {"symptom_matched": [], "drug_matched": [], "unmatched": []}
+    for row in pd_data:
+        cat = str(row.get("カテゴリ名", "")).strip()
+        if not cat:
+            continue
+        if cat in ae_columns:
+            result["symptom_matched"].append(cat)
+        elif cat in drug_names:
+            result["drug_matched"].append(cat)
+        else:
+            result["unmatched"].append(cat)
+    return result, ae_columns
+
+
+def ensure_ae_column_exists(category_name):
+    """
+    抗がん剤副作用マスタに指定カテゴリの列がなければ、
+    「出典」列の直前に新しい列を挿入する（なければ末尾に追加）。
+    """
+    sh = get_spreadsheet()
+    ws = sh.worksheet("抗がん剤副作用マスタ")
+    headers = ws.row_values(1)
+    if category_name in headers:
+        return
+
+    if "出典" in headers:
+        insert_pos = headers.index("出典") + 1
+    else:
+        insert_pos = len(headers) + 1
+
+    n_rows = len(ws.get_all_values())
+    values = [category_name] + [""] * (n_rows - 1)
+    ws.insert_cols([values], insert_pos)
+
+
+def show_new_symptom_review_ui(category_name):
+    """
+    Pdシートに新規追加された症状系カテゴリについて、
+    抗がん剤副作用マスタの全抗がん剤に対し、
+    添付文書を根拠にAIが◯フラグを1件ずつ判定するUI。
+    """
+    ensure_ae_column_exists(category_name)
+
+    sh = get_spreadsheet()
+    ws_ae = sh.worksheet("抗がん剤副作用マスタ")
+    ae_data = ws_ae.get_all_records()
+
+    idx = st.session_state.get("new_cat_review_index", 0)
+
+    if idx >= len(ae_data):
+        st.success(f"✅ 「{category_name}」のレビューが完了しました！")
+        if st.button("🔍 整合性チェックに戻る", use_container_width=True, key="btn_back_to_diag"):
+            st.session_state.pop("new_cat_review_target", None)
+            st.session_state.pop("new_cat_review_index", None)
+            st.session_state.pop("pd_diagnosis", None)
+            st.rerun()
+        return
+
+    row  = ae_data[idx]
+    code = str(row.get("管理コード", "")).strip()
+    name = str(row.get("一般名（全角）", "")).strip()
+
+    st.divider()
+    st.subheader(f"💊 「{category_name}」レビュー ({idx+1}/{len(ae_data)})：{name}")
+
+    current_val = str(row.get(category_name, "")).strip()
+    if current_val == "○":
+        st.info("この薬剤は既に○が設定されています。必要に応じて見直してください。")
+
+    with st.expander("🤖 AIで判定する（添付文書テキストを貼り付け）", expanded=True):
+        st.caption(
+            f"💡 [PMDAで検索](https://www.pmda.go.jp/PmdaSearch/iyakuSearch/) "
+            f"→「{name}」を検索 → 添付文書を開く → テキストを全選択してコピー"
+        )
+        pmda_text = st.text_area(
+            "添付文書テキストをここに貼り付け",
+            height=200,
+            key=f"newcat_pmda_{category_name}_{code}",
+        )
+        if st.button(
+            f"🤖 「{category_name}」を判定",
+            type="primary",
+            use_container_width=True,
+            key=f"newcat_btn_ai_{category_name}_{code}",
+        ):
+            if not pmda_text.strip():
+                st.warning("⚠️ 添付文書テキストを貼り付けてください")
+            else:
+                with st.spinner("AIが判定中...⏳"):
+                    try:
+                        from google import genai as _genai
+                        _client = _genai.Client(api_key=st.secrets["gemini"]["api_key"])
+                        prompt = f"""あなたは薬剤の副作用判定AIです。
+以下の添付文書テキストのみを根拠に、
+この薬剤に「{category_name}」という副作用（有害事象）の
+記載があるかを判定してください。
+
+【薬剤】{name}
+【添付文書テキスト】
+{pmda_text}
+
+「{category_name}」に該当する記載がある場合は "○"、
+ない場合は空文字のみを、他の文字を含めず出力してください。
+"""
+                        response = _client.models.generate_content(
+                            model="gemini-2.5-flash", contents=prompt
+                        )
+                        result_flag = response.text.strip()
+                        result_flag = "○" if "○" in result_flag else ""
+                        st.session_state[f"newcat_cb_{category_name}_{code}"] = (result_flag == "○")
+                        st.success(f"✅ 判定結果：{'○（該当あり）' if result_flag=='○' else '該当なし'}")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"❌ 判定エラー: {e}")
+
+    cb_key = f"newcat_cb_{category_name}_{code}"
+    if cb_key not in st.session_state:
+        st.session_state[cb_key] = (current_val == "○")
+    checked = st.checkbox(f"{category_name} に該当する", key=cb_key)
+
+    col_reg, col_skip = st.columns(2)
+    with col_reg:
+        if st.button(
+            "✅ この内容で登録",
+            type="primary",
+            use_container_width=True,
+            key=f"newcat_btn_reg_{category_name}_{code}",
+        ):
+            headers = ws_ae.row_values(1)
+            col_idx = headers.index(category_name) + 1
+            row_idx = idx + 2
+            ws_ae.update_cell(row_idx, col_idx, "○" if checked else "")
+            st.session_state["new_cat_review_index"] += 1
+            st.rerun()
+    with col_skip:
+        if st.button(
+            "⏭️ スキップ",
+            use_container_width=True,
+            key=f"newcat_btn_skip_{category_name}_{code}",
+        ):
+            st.session_state["new_cat_review_index"] += 1
+            st.rerun()
+
+
+
 
 def build_o_pd_sheet(wb, protocol_no, basic_data, drug_data,
                      master_data, ae_data, pd_data):
