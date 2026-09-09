@@ -2115,6 +2115,44 @@ if not basic_data:
     st.error("データの読み込みに失敗しました。スプレッドシートの公開設定を確認してください。")
     st.stop()
 
+
+# ===== Pd整合性チェック機能 =====
+with st.expander("🔍 Pd整合性チェック（メンテナンス機能）", expanded=False):
+    st.caption("Pdシートのカテゴリと抗がん剤副作用マスタ・薬品マスタの整合性を確認します")
+
+    if st.button("🔍 整合性をチェックする", key="btn_check_pd_alignment"):
+        diag_result, ae_cols = diagnose_pd_ae_alignment(pd_data, ae_data, master_data)
+        st.session_state["pd_diagnosis"] = diag_result
+        st.rerun()
+
+    if "pd_diagnosis" in st.session_state:
+        diag = st.session_state["pd_diagnosis"]
+
+        st.markdown("**✅ 症状系カテゴリ（副作用マスタと一致）**")
+        st.write(diag["symptom_matched"] if diag["symptom_matched"] else "（なし）")
+
+        st.markdown("**✅ 薬剤名カテゴリ（薬品マスタと一致）**")
+        st.write(diag["drug_matched"] if diag["drug_matched"] else "（なし）")
+
+        st.markdown("**⚠️ 未対応カテゴリ（列追加・レビューが必要）**")
+        if diag["unmatched"]:
+            for cat in diag["unmatched"]:
+                col_a, col_b = st.columns([3, 1])
+                with col_a:
+                    st.write(f"・{cat}")
+                with col_b:
+                    if st.button("レビュー開始", key=f"btn_start_review_{cat}"):
+                        st.session_state["new_cat_review_target"] = cat
+                        st.session_state["new_cat_review_index"]  = 0
+                        st.rerun()
+        else:
+            st.success("未対応のカテゴリはありません")
+
+    if st.session_state.get("new_cat_review_target"):
+        show_new_symptom_review_ui(st.session_state["new_cat_review_target"])
+
+
+
 regimen_list = [
     f"{b['プロトコールNo']}　{b['レジメン名']}"
     for b in reversed(basic_data)
