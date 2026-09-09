@@ -521,7 +521,8 @@ def ensure_ae_column_exists(category_name):
     抗がん剤副作用マスタに指定カテゴリの列がなければ、
     「出典」列の直前に新しい列を挿入する（なければ末尾に追加）。
     """
-    sh = get_spreadsheet()
+    _gc_local = get_gspread_client()
+    sh = _gc_local.open_by_url(SPREADSHEET_URL)
     ws = sh.worksheet("抗がん剤副作用マスタ")
     headers = ws.row_values(1)
     if category_name in headers:
@@ -545,7 +546,8 @@ def show_new_symptom_review_ui(category_name):
     """
     ensure_ae_column_exists(category_name)
 
-    sh = get_spreadsheet()
+    _gc_local = get_gspread_client()
+    sh = _gc_local.open_by_url(SPREADSHEET_URL)
     ws_ae = sh.worksheet("抗がん剤副作用マスタ")
     ae_data = ws_ae.get_all_records()
 
