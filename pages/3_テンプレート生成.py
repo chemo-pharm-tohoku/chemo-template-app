@@ -2230,16 +2230,15 @@ with st.expander("🔍 Pd整合性チェック（メンテナンス機能）", e
         st.markdown("**✅ 薬剤・薬効群カテゴリ（マスタと一致）**")
         st.write(diag["drug_matched"] if diag["drug_matched"] else "（なし）")
 
-        st.markdown("**⚠️ 未対応：症状群カテゴリ（AI一括レビューが必要）**")
+        st.markdown("**⚠️ 未対応：症状群カテゴリ（手動登録が必要）**")
         if diag["symptom_unmatched"]:
             for cat in diag["symptom_unmatched"]:
-                col_a, col_b = st.columns([3, 1])
-                with col_a:
-                    st.write(f"・{cat}")
-                with col_b:
-                    if st.button("レビュー開始", key=f"btn_start_review_{cat}"):
-                        st.session_state["new_cat_review_target"] = cat
-                        st.rerun()
+                st.warning(
+                    f"「{cat}」列が抗がん剤副作用マスタにありません。"
+                    f"[スプレッドシートを開く]({SPREADSHEET_URL})で"
+                    f"「{cat}」列を末尾に追加し、各薬剤を確認して該当するものに○をつけ、"
+                    f"出典・登録日を記入してください。"
+                )
         else:
             st.success("未対応の症状群カテゴリはありません")
 
@@ -2249,7 +2248,8 @@ with st.expander("🔍 Pd整合性チェック（メンテナンス機能）", e
                 st.warning(
                     f"「{cat}」列が抗がん剤副作用マスタにありません。"
                     f"[スプレッドシートを開く]({SPREADSHEET_URL})で"
-                    f"「{cat}」列を追加し、該当薬剤に直接○をつけてください。"
+                    f"「{cat}」列を末尾に追加し、各薬剤を確認して該当するものに○をつけ、"
+                    f"出典・登録日を記入してください。"
                 )
         else:
             st.success("未対応の薬剤・薬効群カテゴリはありません")
@@ -2258,9 +2258,6 @@ with st.expander("🔍 Pd整合性チェック（メンテナンス機能）", e
             st.markdown("**❓ 種別未設定のカテゴリ**")
             st.write(diag["no_type"])
             st.caption("Pdシートの「種別」列に「症状群」または「薬剤・薬効群」を設定してください。")
-
-    if st.session_state.get("new_cat_review_target"):
-        show_new_symptom_review_ui(st.session_state["new_cat_review_target"])
 
 
 
