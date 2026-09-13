@@ -542,7 +542,7 @@ def diagnose_pd_ae_alignment(pd_data, ae_data, master_data):
 def ensure_ae_column_exists(category_name):
     """
     抗がん剤副作用マスタに指定カテゴリの列がなければ、
-    「出典」列の直前に新しい列を挿入する（なければ末尾に追加）。
+    実際に使用されている最後の列（末尾の空列を除く）の直後に挿入する。
     """
     _gc_local = get_gspread_client()
     sh = _gc_local.open_by_url(SPREADSHEET_URL)
@@ -551,10 +551,12 @@ def ensure_ae_column_exists(category_name):
     if category_name in headers:
         return
 
-    if "出典" in headers:
-        insert_pos = headers.index("出典") + 1
-    else:
-        insert_pos = len(headers) + 1
+    # 末尾の空白列を除いた「実際に使われている最後の列」を特定
+    last_used_idx = 0  # 1-based
+    for i, h in enumerate(headers):
+        if str(h).strip():
+            last_used_idx = i + 1
+    insert_pos = last_used_idx + 1
 
     n_rows = len(ws.get_all_values())
     values = [category_name] + [""] * (n_rows - 1)
