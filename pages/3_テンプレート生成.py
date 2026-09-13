@@ -20,6 +20,20 @@ from datetime import date
 
 today_str = date.today().strftime("%Y%m%d")
 
+import pathlib
+REFERENCE_MANUAL_DIR = pathlib.Path(__file__).resolve().parent.parent / "reference_docs" / "resident_manual"
+
+def load_reference_manual_text():
+    """reference_docs/resident_manual/ 配下の全txtファイルを結合して返す"""
+    texts = []
+    if REFERENCE_MANUAL_DIR.exists():
+        for f in sorted(REFERENCE_MANUAL_DIR.glob("*.txt")):
+            try:
+                texts.append(f.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+    return "\n\n".join(texts)
+
 st.set_page_config(
     page_title="テンプレート生成",
     page_icon="💊",
@@ -485,8 +499,8 @@ def show_ae_register_ui(unregistered, ae_data, master_data, drug_data, basic_dat
 
 def diagnose_pd_ae_alignment(pd_data, ae_data, master_data):
     """
-    Pdシートのカテゴリと、抗がん剤副作用マスタの列名・薬品マスタの薬剤名を比較し、
-    各カテゴリを「症状系（マッチ済み）」「薬剤名系（マッチ済み）」「未対応」に分類する。
+    Pdシートの「種別」列（症状群／薬剤・薬効群）に基づき、
+    抗がん剤副作用マスタの列名と一致するかどうかを判定する。
     """
     if ae_data:
         all_keys = list(ae_data[0].keys())
@@ -495,24 +509,33 @@ def diagnose_pd_ae_alignment(pd_data, ae_data, master_data):
     excluded = {"管理コード", "一般名（全角）", "出典", "登録日"}
     ae_columns = [k for k in all_keys if k not in excluded]
 
-    drug_names = set()
-    for m in master_data:
-        for key in ("一般名（全角）", "採用商品名（全角）"):
-            v = str(m.get(key, "")).strip()
-            if v:
-                drug_names.add(v)
+    result = {
+        "symptom_matched": [],
+        "symptom_unmatched": [],
+        "drug_matched": [],
+        "drug_unmatched": [],
+        "no_type": [],
+    }
 
-    result = {"symptom_matched": [], "drug_matched": [], "unmatched": []}
     for row in pd_data:
         cat = str(row.get("カテゴリ名", "")).strip()
+        cat_type = str(row.get("種別", "")).strip()
         if not cat:
             continue
-        if cat in ae_columns:
-            result["symptom_matched"].append(cat)
-        elif cat in drug_names:
-            result["drug_matched"].append(cat)
+
+        if cat_type == "症状群":
+            if cat in ae_columns:
+                result["symptom_matched"].append(cat)
+            else:
+                result["symptom_unmatched"].append(cat)
+        elif cat_type == "薬剤・薬効群":
+            if cat in ae_columns:
+                result["drug_matched"].append(cat)
+            else:
+                result["drug_unmatched"].append(cat)
         else:
-            result["unmatched"].append(cat)
+            result["no_type"].append(cat)
+
     return result, ae_columns
 
 
@@ -540,9 +563,9 @@ def ensure_ae_column_exists(category_name):
 
 def show_new_symptom_review_ui(category_name):
     """
-    Pdシートに新規追加された症状系カテゴリについて、
-    抗がん剤副作用マスタの全抗がん剤に対し、
-    添付文書を根拠にAIが◯フラグを1件ずつ判定するUI。
+    Pdシートに新規追加された症状群カテゴリについて、
+    がん診療レジデントマニュアル（reference_docs/resident_manual/）を根拠に、
+    抗がん剤副作用マスタの全薬剤に対しAIが一括で◯フラグを判定するUI。
     """
     ensure_ae_column_exists(category_name)
 
@@ -550,102 +573,173 @@ def show_new_symptom_review_ui(category_name):
     sh = _gc_local.open_by_url(SPREADSHEET_URL)
     ws_ae = sh.worksheet("抗がん剤副作用マスタ")
     ae_data = ws_ae.get_all_records()
-
-    idx = st.session_state.get("new_cat_review_index", 0)
-
-    if idx >= len(ae_data):
-        st.success(f"✅ 「{category_name}」のレビューが完了しました！")
-        if st.button("🔍 整合性チェックに戻る", use_container_width=True, key="btn_back_to_diag"):
-            st.session_state.pop("new_cat_review_target", None)
-            st.session_state.pop("new_cat_review_index", None)
-            st.session_state.pop("pd_diagnosis", None)
-            st.rerun()
-        return
-
-    row  = ae_data[idx]
-    code = str(row.get("管理コード", "")).strip()
-    name = str(row.get("一般名（全角）", "")).strip()
+    headers = ws_ae.row_values(1)
 
     st.divider()
-    st.subheader(f"💊 「{category_name}」レビュー ({idx+1}/{len(ae_data)})：{name}")
+    st.subheader(f"💊 「{category_name}」一括レビュー（対象：抗がん剤 {len(ae_data)}件）")
 
-    current_val = str(row.get(category_name, "")).strip()
-    if current_val == "○":
-        st.info("この薬剤は既に○が設定されています。必要に応じて見直してください。")
-
-    with st.expander("🤖 AIで判定する（添付文書テキストを貼り付け）", expanded=True):
-        st.caption(
-            f"💡 [PMDAで検索](https://www.pmda.go.jp/PmdaSearch/iyakuSearch/) "
-            f"→「{name}」を検索 → 添付文書を開く → テキストを全選択してコピー"
+    reference_text = load_reference_manual_text()
+    if not reference_text:
+        st.error(
+            "⚠️ reference_docs/resident_manual/ に参照テキストが見つかりません。"
+            "リポジトリへの配置状況を確認してください。"
         )
-        pmda_text = st.text_area(
-            "添付文書テキストをここに貼り付け",
-            height=200,
-            key=f"newcat_pmda_{category_name}_{code}",
-        )
-        if st.button(
-            f"🤖 「{category_name}」を判定",
-            type="primary",
-            use_container_width=True,
-            key=f"newcat_btn_ai_{category_name}_{code}",
-        ):
-            if not pmda_text.strip():
-                st.warning("⚠️ 添付文書テキストを貼り付けてください")
-            else:
-                with st.spinner("AIが判定中...⏳"):
-                    try:
-                        from google import genai as _genai
-                        _client = _genai.Client(api_key=st.secrets["gemini"]["api_key"])
-                        prompt = f"""あなたは薬剤の副作用判定AIです。
-以下の添付文書テキストのみを根拠に、
-この薬剤に「{category_name}」という副作用（有害事象）の
-記載があるかを判定してください。
+        return
 
-【薬剤】{name}
-【添付文書テキスト】
-{pmda_text}
+    st.caption(f"📚 参照資料：がん診療レジデントマニュアル第10版（{len(reference_text):,}文字を読み込み済み）")
 
-「{category_name}」に該当する記載がある場合は "○"、
-ない場合は空文字のみを、他の文字を含めず出力してください。
+    result_key = f"bulk_ai_result_{category_name}"
+
+    if st.button(
+        f"🤖 AIで「{category_name}」を一括判定",
+        type="primary",
+        use_container_width=True,
+        key=f"bulk_ai_btn_{category_name}",
+    ):
+        with st.spinner("AIが判定中です...少々お待ちください⏳"):
+            try:
+                from google import genai as _genai
+                from google.genai import types as _types
+                _client = _genai.Client(api_key=st.secrets["gemini"]["api_key"])
+
+                drug_list_text = "\n".join(
+                    f"{r.get('管理コード','')},{r.get('一般名（全角）','')}"
+                    for r in ae_data
+                )
+
+                prompt = f"""あなたは薬剤副作用判定AIです。
+
+以下の「がん診療レジデントマニュアル」抜粋テキストのみを根拠に、
+薬剤リストの中で「{category_name}」という副作用（有害事象）の
+記載がある薬剤を判定してください。
+
+【がん診療レジデントマニュアル抜粋】
+{reference_text}
+
+【薬剤リスト（管理コード,一般名）】
+{drug_list_text}
+
+【出力ルール】
+・CSV形式、ヘッダーなし
+・薬剤リストの全{len(ae_data)}件を必ず1行ずつ出力する（省略しない）
+・各行は「管理コード,判定結果」の形式
+・判定結果は、該当する記載があれば "○"、なければ空欄
+・マニュアルに記載のない薬剤は空欄とする
+
+出力例：
+AC001,○
+AC002,
 """
-                        response = _client.models.generate_content(
-                            model="gemini-2.5-flash", contents=prompt
-                        )
-                        result_flag = response.text.strip()
-                        result_flag = "○" if "○" in result_flag else ""
-                        st.session_state[f"newcat_cb_{category_name}_{code}"] = (result_flag == "○")
-                        st.success(f"✅ 判定結果：{'○（該当あり）' if result_flag=='○' else '該当なし'}")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"❌ 判定エラー: {e}")
+                response = _client.models.generate_content(
+                    model="gemini-2.5-flash",
+                    contents=prompt,
+                    config=_types.GenerateContentConfig(
+                        thinking_config=_types.ThinkingConfig(thinking_budget=0)
+                    ),
+                )
+                raw = response.text.strip()
+                raw = re.sub(r"```[a-zA-Z]*", "", raw).replace("```", "").strip()
 
-    cb_key = f"newcat_cb_{category_name}_{code}"
-    if cb_key not in st.session_state:
-        st.session_state[cb_key] = (current_val == "○")
-    checked = st.checkbox(f"{category_name} に該当する", key=cb_key)
+                flag_dict = {}
+                for line in raw.splitlines():
+                    line = line.strip()
+                    if not line or "," not in line:
+                        continue
+                    parts_line = [p.strip() for p in line.split(",")]
+                    code = parts_line[0]
+                    flag = parts_line[1] if len(parts_line) > 1 else ""
+                    flag_dict[code] = "○" if "○" in flag else ""
 
-    col_reg, col_skip = st.columns(2)
-    with col_reg:
+                st.session_state[result_key] = flag_dict
+                st.success(f"✅ AI判定完了：{len(flag_dict)}件を判定しました")
+                st.rerun()
+            except Exception as e:
+                st.error(f"❌ 判定エラー: {e}")
+
+    if result_key in st.session_state:
+        flag_dict = st.session_state[result_key]
+
+        st.markdown("**判定結果を確認・修正してください**")
+        edited = {}
+        for r in ae_data:
+            code    = str(r.get("管理コード", "")).strip()
+            name    = str(r.get("一般名（全角）", "")).strip()
+            current = str(r.get(category_name, "")).strip()
+            ai_flag = flag_dict.get(code, "")
+            default_checked = (ai_flag == "○") or (current == "○")
+            cb_key = f"bulk_cb_{category_name}_{code}"
+            if cb_key not in st.session_state:
+                st.session_state[cb_key] = default_checked
+            edited[code] = st.checkbox(f"{name}（{code}）", key=cb_key)
+
         if st.button(
-            "✅ この内容で登録",
+            f"✅ 「{category_name}」を一括登録する",
             type="primary",
             use_container_width=True,
-            key=f"newcat_btn_reg_{category_name}_{code}",
+            key=f"bulk_commit_{category_name}",
         ):
-            headers = ws_ae.row_values(1)
-            col_idx = headers.index(category_name) + 1
-            row_idx = idx + 2
-            ws_ae.update_cell(row_idx, col_idx, "○" if checked else "")
-            st.session_state["new_cat_review_index"] += 1
-            st.rerun()
-    with col_skip:
-        if st.button(
-            "⏭️ スキップ",
-            use_container_width=True,
-            key=f"newcat_btn_skip_{category_name}_{code}",
-        ):
-            st.session_state["new_cat_review_index"] += 1
-            st.rerun()
+            with st.spinner("スプレッドシートを更新中..."):
+                try:
+                    from datetime import date as _date
+                    from openpyxl.utils import get_column_letter
+                    today = _date.today().strftime("%Y/%m/%d")
+
+                    cat_col_idx  = headers.index(category_name) + 1
+                    src_col_idx  = headers.index("出典") + 1 if "出典" in headers else None
+                    date_col_idx = headers.index("登録日") + 1 if "登録日" in headers else None
+
+                    cat_values, src_values, date_values = [], [], []
+                    source_label = "がん診療レジデントマニュアル第10版"
+
+                    for r in ae_data:
+                        code = str(r.get("管理コード", "")).strip()
+                        cat_values.append(["○" if edited.get(code) else ""])
+
+                        if src_col_idx:
+                            existing_src = str(r.get("出典", "")).strip()
+                            src_list = [s.strip() for s in existing_src.split(",") if s.strip()]
+                            if source_label not in src_list:
+                                src_list.append(source_label)
+                            src_values.append([",".join(src_list)])
+
+                        if date_col_idx:
+                            date_values.append([today])
+
+                    n_rows = len(ae_data)
+                    cat_letter = get_column_letter(cat_col_idx)
+                    ws_ae.update(range_name=f"{cat_letter}2:{cat_letter}{1+n_rows}", values=cat_values)
+
+                    if src_col_idx:
+                        src_letter = get_column_letter(src_col_idx)
+                        ws_ae.update(range_name=f"{src_letter}2:{src_letter}{1+n_rows}", values=src_values)
+
+                    if date_col_idx:
+                        date_letter = get_column_letter(date_col_idx)
+                        ws_ae.update(range_name=f"{date_letter}2:{date_letter}{1+n_rows}", values=date_values)
+
+                    st.success(
+                        f"✅ 「{category_name}」を"
+                        f"{sum(1 for v in edited.values() if v)}件、○として登録しました！"
+                    )
+
+                    for r in ae_data:
+                        code = str(r.get("管理コード", "")).strip()
+                        st.session_state.pop(f"bulk_cb_{category_name}_{code}", None)
+                    st.session_state.pop(result_key, None)
+                    st.session_state.pop("new_cat_review_target", None)
+                    st.session_state.pop("pd_diagnosis", None)
+                    fetch_sheet_realtime.clear()
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"❌ 登録エラー: {e}")
+
+    if st.button(
+        "🔙 整合性チェックに戻る（保存せず終了）",
+        key=f"bulk_back_{category_name}",
+    ):
+        st.session_state.pop("new_cat_review_target", None)
+        st.session_state.pop(result_key, None)
+        st.rerun()
 
 
 
@@ -2118,7 +2212,7 @@ if not basic_data:
 
 # ===== Pd整合性チェック機能 =====
 with st.expander("🔍 Pd整合性チェック（メンテナンス機能）", expanded=False):
-    st.caption("Pdシートのカテゴリと抗がん剤副作用マスタ・薬品マスタの整合性を確認します")
+    st.caption("Pdシートの「種別」列に基づき、抗がん剤副作用マスタとの整合性を確認します")
 
     if st.button("🔍 整合性をチェックする", key="btn_check_pd_alignment"):
         diag_result, ae_cols = diagnose_pd_ae_alignment(pd_data, ae_data, master_data)
@@ -2128,25 +2222,40 @@ with st.expander("🔍 Pd整合性チェック（メンテナンス機能）", e
     if "pd_diagnosis" in st.session_state:
         diag = st.session_state["pd_diagnosis"]
 
-        st.markdown("**✅ 症状系カテゴリ（副作用マスタと一致）**")
+        st.markdown("**✅ 症状群カテゴリ（マスタと一致）**")
         st.write(diag["symptom_matched"] if diag["symptom_matched"] else "（なし）")
 
-        st.markdown("**✅ 薬剤名カテゴリ（薬品マスタと一致）**")
+        st.markdown("**✅ 薬剤・薬効群カテゴリ（マスタと一致）**")
         st.write(diag["drug_matched"] if diag["drug_matched"] else "（なし）")
 
-        st.markdown("**⚠️ 未対応カテゴリ（列追加・レビューが必要）**")
-        if diag["unmatched"]:
-            for cat in diag["unmatched"]:
+        st.markdown("**⚠️ 未対応：症状群カテゴリ（AI一括レビューが必要）**")
+        if diag["symptom_unmatched"]:
+            for cat in diag["symptom_unmatched"]:
                 col_a, col_b = st.columns([3, 1])
                 with col_a:
                     st.write(f"・{cat}")
                 with col_b:
                     if st.button("レビュー開始", key=f"btn_start_review_{cat}"):
                         st.session_state["new_cat_review_target"] = cat
-                        st.session_state["new_cat_review_index"]  = 0
                         st.rerun()
         else:
-            st.success("未対応のカテゴリはありません")
+            st.success("未対応の症状群カテゴリはありません")
+
+        st.markdown("**⚠️ 未対応：薬剤・薬効群カテゴリ（手動登録が必要）**")
+        if diag["drug_unmatched"]:
+            for cat in diag["drug_unmatched"]:
+                st.warning(
+                    f"「{cat}」列が抗がん剤副作用マスタにありません。"
+                    f"[スプレッドシートを開く]({SPREADSHEET_URL})で"
+                    f"「{cat}」列を追加し、該当薬剤に直接○をつけてください。"
+                )
+        else:
+            st.success("未対応の薬剤・薬効群カテゴリはありません")
+
+        if diag["no_type"]:
+            st.markdown("**❓ 種別未設定のカテゴリ**")
+            st.write(diag["no_type"])
+            st.caption("Pdシートの「種別」列に「症状群」または「薬剤・薬効群」を設定してください。")
 
     if st.session_state.get("new_cat_review_target"):
         show_new_symptom_review_ui(st.session_state["new_cat_review_target"])
@@ -2536,17 +2645,26 @@ if selected_basic and result:
         _o_lines.append("")
 
     # Pd欄
-    _basic_row_tsv = next(
-        (b for b in basic_data if b["プロトコールNo"] == protocol_no), {}
-    )
-    _pd_cat_raw = str(_basic_row_tsv.get("Pdカテゴリ","")).strip()
-    _pd_cat_list = [x.strip() for x in _pd_cat_raw.split("|") if x.strip()]
-    _matched_pda = sorted(
-        [p for p in pd_data
-         if str(p.get("種別","")).strip() == "A"
-         and p.get("カテゴリID","") in _pd_cat_list],
-        key=lambda x: int(x["優先順位"]) if str(x.get("優先順位","")).isdigit() else 99
-    )
+    # Pd欄（新方式：抗がん剤副作用マスタのフラグ／薬剤名とPdカテゴリ名の完全一致で判定）
+    _drug_names_for_pd_tsv = set()
+    for _c in _cancer_codes_tsv:
+        _m_tsv = next((mm for mm in master_data if str(mm.get("管理コード","")).strip() == _c), {})
+        for _key in ("一般名（全角）", "採用商品名（全角）"):
+            _nm = str(_m_tsv.get(_key, "")).strip()
+            if _nm:
+                _drug_names_for_pd_tsv.add(_nm)
+        _d_tsv = next((dd for dd in drug_data if str(dd.get("管理コード","")).strip() == _c), {})
+        _nm2 = str(_d_tsv.get("商品名", "")).strip()
+        if _nm2:
+            _drug_names_for_pd_tsv.add(_nm2)
+
+    _matched_pda = []
+    for p in pd_data:
+        _cat_name_tsv = str(p.get("カテゴリ名", "")).strip()
+        if not _cat_name_tsv:
+            continue
+        if _ae_flags_tsv.get(_cat_name_tsv, False) or _cat_name_tsv in _drug_names_for_pd_tsv:
+            _matched_pda.append(p)
     _o_lines.append("Pd；ご本人に対して初回面談実施。服薬状況、服薬理解度および有害事象の発現状況の確認を行った。\t\t\t\t\t\t")
     _o_lines.append("化学療法のしおり、メーカー作成パンフレット（パンフレット名記載）、添付する説明書を用いて説明した。\t\t\t\t\t\t")
     for _pda in _matched_pda:
