@@ -1,7 +1,7 @@
 import streamlit as st
 
 st.set_page_config(
-    page_title="ケモテンプレート生成システム",
+    page_title="ケモテンプレートシステム",
     page_icon="💊",
     layout="centered",
     initial_sidebar_state="expanded",
@@ -11,7 +11,7 @@ st.set_page_config(
 st.sidebar.title("メニュー")
 
 # ===== タイトル =====
-st.title("💊 ケモテンプレートシステム")
+st.title("💊 ケモテンプレート生成システム")
 st.subheader("東北大学病院 薬剤部")
 st.divider()
 
