@@ -1,4 +1,7 @@
 import streamlit as st
+import pathlib
+
+MANUAL_DIR = pathlib.Path(__file__).resolve().parent / "manuals"
 
 st.set_page_config(
     page_title="ケモテンプレートシステム",
@@ -15,7 +18,36 @@ st.title("💊 ケモテンプレート生成システム")
 st.subheader("東北大学病院 薬剤部")
 st.divider()
 
+# ===== マニュアル =====
+st.subheader("📖 マニュアル")
+
+with st.container(border=True):
+    st.caption("使い方に迷ったら、まずはこちらをご確認ください")
+
+    manual_files = [
+        ("① ケモテンプレート生成アプリの使用方法", "アプリ使用方法.pdf"),
+        ("② Pd欄・抗がん剤副作用マスタ 運用マニュアル", "Pd運用マニュアル.pdf"),
+    ]
+
+    for label, filename in manual_files:
+        file_path = MANUAL_DIR / filename
+        if file_path.exists():
+            with open(file_path, "rb") as f:
+                st.download_button(
+                    label=f"⬇️ {label}",
+                    data=f.read(),
+                    file_name=filename,
+                    mime="application/pdf",
+                    use_container_width=True,
+                    key=f"btn_manual_{filename}"
+                )
+        else:
+            st.caption(f"⚠️ {label}（未配置：manuals/{filename}）")
+
+st.divider()
+
 # ===== 新規レジメン登録 =====
+st.subheader("🆕 新規レジメン登録")
 st.subheader("🆕 新規レジメン登録")
 
 with st.container(border=True):
