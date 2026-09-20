@@ -872,10 +872,11 @@ def build_o_pd_sheet(wb, protocol_no, basic_data, drug_data,
         ("●食欲不振　　　　□なし　□G1　□G2　□G3　□G4",                  True,  None),
         ("●便秘　　　　　　□なし　□あり　（ベースライン 回数：　　　、BS：　　　）", True, None),
         ("●倦怠感　　　　　□なし　□G1　□G2　□G3",                        True,  None),
-        ("●骨髄抑制\n　　WBC　　□なし　□G1　□G2　□G3　□G4\n"
-         "　　Neut　　□なし　□G1　□G2　□G3　□G4\n"
-         "　　Hb　　　□なし　□G1　□G2　□G3　□G4\n"
-         "　　PLT　　　□なし　□G1　□G2　□G3　□G4",                      True,  None),
+        ("●骨髄抑制\n"
+         "　　WBC　　　　　□なし　□G1　□G2　□G3　□G4\n"
+         "　　Neut　　　　□なし　□G1　□G2　□G3　□G4\n"
+         "　　Hb　　　　　　□なし　□G1　□G2　□G3　□G4\n"
+         "　　PLT　　　　　□なし　□G1　□G2　□G3　□G4",                  True,  None),
         ("●肝機能障害　　　□なし　□あり",                                  True,  None),
         ("●腎機能障害　　　□なし　□あり",                                  True,  None),
         ("●電解質異常　　　□なし　□あり",                                  True,  None),
@@ -1218,11 +1219,12 @@ def create_excel(protocol_no, basic_data, drug_data,
                         if str(d.get('①O欄_支持療法','')) == '○'
                         and str(d.get('投与順序','')) == '内服']
 
-    need_bsa = any(str(d['用量根拠']) == 'BSA依存' for d in cancer_drugs)
-    need_ccr = any(str(d['用量根拠']) == 'AUC依存' for d in cancer_drugs)
-    need_bw  = any(str(d['用量根拠']) in ('BW依存','AUC依存') for d in cancer_drugs)
-    need_age = need_ccr
-    need_sex = need_ccr
+    # 部員要望：体表面積・体重・腎機能（SCr/Ccr）は全レジメン共通で常時入力可能にする
+    need_bsa = True
+    need_ccr = True
+    need_bw  = True
+    need_age = True
+    need_sex = True
 
     wb = Workbook()
     wb.remove(wb.active)
@@ -2413,9 +2415,10 @@ if selected_basic and result:
                      if str(d.get("①O欄_支持療法",""))=="○"
                      and str(d.get("投与順序",""))=="内服"]
 
-    _need_bsa = any(str(d.get("用量根拠",""))=="BSA依存"             for d in _cancer_drugs)
-    _need_ccr = any(str(d.get("用量根拠",""))=="AUC依存"             for d in _cancer_drugs)
-    _need_bw  = any(str(d.get("用量根拠","")) in ("BW依存","AUC依存") for d in _cancer_drugs)
+    # 部員要望：体表面積・体重・腎機能は全レジメン共通で常時入力欄を表示
+    _need_bsa = True
+    _need_ccr = True
+    _need_bw  = True
 
     # ── 固定行番号定義 ──
     _R_BW       = 3
@@ -2515,10 +2518,17 @@ if selected_basic and result:
     _regimen_name = _basic.get("レジメン名","")
     _course_days  = _basic.get("1コース日数","")
 
+    _patient_line_tsv = (
+        f'="BSA："&TEXT(B{_R_BSA},"0.000")&" m2"&"  "&'
+        f'"BW："&TEXT(B{_R_BW},"0.0")&" kg"&"  "&'
+        f'"SCr："&B{_R_SCR}&"  "&'
+        f'"Ccr："&TEXT(B{_R_CCR},"0.0")&" mL/min"'
+    )
     _o_lines = [
         "【O欄・Pd欄】\t\t\t\t\t\t",
         f"●化学療法：【{protocol_no}】{_regimen_name}（1コース{_course_days}日）\t\t\t\t\t\t",
         f"=B{_R_COURSE}\tコース目\t開始日\t=TEXT(B{_R_START},\"YYYY/M/D\")",
+        f"{_patient_line_tsv}\t\t\t\t\t",
     ]
 
     _seen_o = set()
@@ -2606,7 +2616,7 @@ if selected_basic and result:
         ("●食欲不振　　　　□なし　□G1　□G2　□G3　□G4", True, None),
         ("●便秘　　　　　　□なし　□あり（ベースライン 回数：　　　、BS：　　　）", True, None),
         ("●倦怠感　　　　　□なし　□G1　□G2　□G3", True, None),
-        ("●骨髄抑制 WBC/Neut/Hb/PLT　各□なし〜□G4", True, None),
+        ("__BONE_MARROW__", True, None),
         ("●肝機能障害　　　□なし　□あり", True, None),
         ("●腎機能障害　　　□なし　□あり", True, None),
         ("●電解質異常　　　□なし　□あり", True, None),
@@ -2625,6 +2635,13 @@ if selected_basic and result:
     _o_lines.append("◇副作用\t\t\t\t\t\t")
     for _txt, _always, _flag in _AE_ITEMS_TSV:
         if not _always and not _ae_flags_tsv.get(_flag, False):
+            continue
+        if _txt == "__BONE_MARROW__":
+            _o_lines.append("●骨髄抑制\t\t\t\t\t\t")
+            _o_lines.append("　　WBC　　　　　□なし　□G1　□G2　□G3　□G4\t\t\t\t\t\t")
+            _o_lines.append("　　Neut　　　　□なし　□G1　□G2　□G3　□G4\t\t\t\t\t\t")
+            _o_lines.append("　　Hb　　　　　　□なし　□G1　□G2　□G3　□G4\t\t\t\t\t\t")
+            _o_lines.append("　　PLT　　　　　□なし　□G1　□G2　□G3　□G4\t\t\t\t\t\t")
             continue
         _o_lines.append(f"{_txt}\t\t\t\t\t\t")
     _o_lines.append("")
