@@ -17,44 +17,7 @@ st.sidebar.title("メニュー")
 st.title("💊 ケモテンプレート生成システム")
 st.subheader("東北大学病院 薬剤部")
 st.divider()
-
-# ===== 一時デバッグ：manualsフォルダの中身を確認 =====
-with st.expander("🔧 デバッグ：manualsフォルダの中身", expanded=True):
-    if MANUAL_DIR.exists():
-        all_pdfs = list(MANUAL_DIR.glob("*.pdf"))
-        st.write(f"見つかったPDFファイル数: {len(all_pdfs)}")
-        for f in all_pdfs:
-            st.code(f"ファイル名: {f.name}\nrepr: {repr(f.name)}\nbytes: {f.name.encode('utf-8')}")
-    else:
-        st.error(f"MANUAL_DIRが存在しません: {MANUAL_DIR}")
         
-# ===== マニュアル =====
-st.subheader("📖 マニュアル")
-
-with st.container(border=True):
-    st.caption("使い方に迷ったら、まずはこちらをご確認ください")
-
-    manual_prefixes = [
-        ("① ケモテンプレート生成アプリの使用方法", "ケモテンプレート生成アプリの使用方法"),
-        ("② Pd欄・抗がん剤副作用マスタ 運用マニュアル", "Pd説明文メンテナンス方法"),
-    ]
-
-    for label, prefix in manual_prefixes:
-        matched = sorted(MANUAL_DIR.glob(f"{prefix}*.pdf"), reverse=True)
-        if matched:
-            file_path = matched[0]  # ファイル名の末尾日付が新しいものを優先採用
-            with open(file_path, "rb") as f:
-                st.download_button(
-                    label=f"⬇️ {label}（{file_path.stem}）",
-                    data=f.read(),
-                    file_name=file_path.name,
-                    mime="application/pdf",
-                    use_container_width=True,
-                    key=f"btn_manual_{prefix}"
-                )
-        else:
-            st.caption(f"⚠️ {label}（未配置：manuals/{prefix}*.pdf）")
-st.divider()
 
 # ===== 新規レジメン登録 =====
 st.subheader("🆕 新規レジメン登録")
@@ -193,4 +156,38 @@ with st.container(border=True):
 
     st.markdown("")
     st.warning("⚠️ 本マスタを編集するとシステム全体に影響します。")
+
+# ===== マニュアル =====
+st.subheader("📖 マニュアル")
+
+with st.container(border=True):
+    st.caption("使い方に迷ったら、まずはこちらをご確認ください")
+
+    import base64
+
+    manual_prefixes = [
+        ("① ケモテンプレート生成アプリの使用方法", "ケモテンプレート生成アプリの使用方法"),
+        ("② Pd欄・抗がん剤副作用マスタ 運用マニュアル", "Pd説明文メンテナンス方法"),
+    ]
+
+    for label, prefix in manual_prefixes:
+        matched = sorted(MANUAL_DIR.glob(f"{prefix}*.pdf"), reverse=True)
+        if matched:
+            file_path = matched[0]  # ファイル名の末尾日付が新しいものを優先採用
+            with st.expander(f"📄 {label}（{file_path.stem}）", expanded=False):
+                with open(file_path, "rb") as f:
+                    pdf_bytes = f.read()
+                b64_pdf = base64.b64encode(pdf_bytes).decode("utf-8")
+                pdf_display = f'''
+                    <iframe
+                        src="data:application/pdf;base64,{b64_pdf}"
+                        width="100%"
+                        height="800"
+                        style="border:none;">
+                    </iframe>
+                '''
+                st.markdown(pdf_display, unsafe_allow_html=True)
+        else:
+            st.caption(f"⚠️ {label}（未配置：manuals/{prefix}*.pdf）")
+st.divider()
 
