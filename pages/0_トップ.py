@@ -163,7 +163,11 @@ st.subheader("📖 マニュアル")
 with st.container(border=True):
     st.caption("使い方に迷ったら、まずはこちらをご確認ください")
 
-    import base64
+    import urllib.parse
+
+    GITHUB_OWNER = "chemo-pharm-tohoku"
+    GITHUB_REPO  = "chemo-template-app"
+    GITHUB_BRANCH = "main"
 
     manual_prefixes = [
         ("① ケモテンプレート生成アプリの使用方法", "ケモテンプレート生成アプリの使用方法"),
@@ -174,19 +178,16 @@ with st.container(border=True):
         matched = sorted(MANUAL_DIR.glob(f"{prefix}*.pdf"), reverse=True)
         if matched:
             file_path = matched[0]  # ファイル名の末尾日付が新しいものを優先採用
-            with st.expander(f"📄 {label}（{file_path.stem}）", expanded=False):
-                with open(file_path, "rb") as f:
-                    pdf_bytes = f.read()
-                b64_pdf = base64.b64encode(pdf_bytes).decode("utf-8")
-                pdf_display = f'''
-                    <iframe
-                        src="data:application/pdf;base64,{b64_pdf}"
-                        width="100%"
-                        height="800"
-                        style="border:none;">
-                    </iframe>
-                '''
-                st.markdown(pdf_display, unsafe_allow_html=True)
+            encoded_name = urllib.parse.quote(file_path.name)
+            blob_url = (
+                f"https://github.com/{GITHUB_OWNER}/{GITHUB_REPO}"
+                f"/blob/{GITHUB_BRANCH}/manuals/{encoded_name}"
+            )
+            st.link_button(
+                f"📄 {label}（{file_path.stem}）を開く",
+                blob_url,
+                use_container_width=True,
+            )
         else:
             st.caption(f"⚠️ {label}（未配置：manuals/{prefix}*.pdf）")
 st.divider()
