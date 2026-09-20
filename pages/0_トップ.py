@@ -24,10 +24,26 @@ st.subheader("📖 マニュアル")
 with st.container(border=True):
     st.caption("使い方に迷ったら、まずはこちらをご確認ください")
 
-    manual_files = [
-        ("① ケモテンプレート生成アプリの使用方法", "アプリ使用方法.pdf"),
-        ("② Pd欄・抗がん剤副作用マスタ 運用マニュアル", "Pd運用マニュアル.pdf"),
+    manual_prefixes = [
+        ("① ケモテンプレート生成アプリの使用方法", "ケモテンプレート生成アプリの使用方法"),
+        ("② Pd欄・抗がん剤副作用マスタ 運用マニュアル", "Pd説明文メンテナンス方法"),
     ]
+
+    for label, prefix in manual_prefixes:
+        matched = sorted(MANUAL_DIR.glob(f"{prefix}*.pdf"), reverse=True)
+        if matched:
+            file_path = matched[0]  # 最新（ファイル名が大きい=新しい日付）を採用
+            with open(file_path, "rb") as f:
+                st.download_button(
+                    label=f"⬇️ {label}",
+                    data=f.read(),
+                    file_name=file_path.name,
+                    mime="application/pdf",
+                    use_container_width=True,
+                    key=f"btn_manual_{prefix}"
+                )
+        else:
+            st.caption(f"⚠️ {label}（未配置：manuals/{prefix}*.pdf）")
 
     for label, filename in manual_files:
         file_path = MANUAL_DIR / filename
