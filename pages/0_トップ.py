@@ -32,10 +32,10 @@ with st.container(border=True):
     for label, prefix in manual_prefixes:
         matched = sorted(MANUAL_DIR.glob(f"{prefix}*.pdf"), reverse=True)
         if matched:
-            file_path = matched[0]  # 最新（ファイル名が大きい=新しい日付）を採用
+            file_path = matched[0]  # ファイル名の末尾日付が新しいものを優先採用
             with open(file_path, "rb") as f:
                 st.download_button(
-                    label=f"⬇️ {label}",
+                    label=f"⬇️ {label}（{file_path.stem}）",
                     data=f.read(),
                     file_name=file_path.name,
                     mime="application/pdf",
@@ -44,22 +44,6 @@ with st.container(border=True):
                 )
         else:
             st.caption(f"⚠️ {label}（未配置：manuals/{prefix}*.pdf）")
-
-    for label, filename in manual_files:
-        file_path = MANUAL_DIR / filename
-        if file_path.exists():
-            with open(file_path, "rb") as f:
-                st.download_button(
-                    label=f"⬇️ {label}",
-                    data=f.read(),
-                    file_name=filename,
-                    mime="application/pdf",
-                    use_container_width=True,
-                    key=f"btn_manual_{filename}"
-                )
-        else:
-            st.caption(f"⚠️ {label}（未配置：manuals/{filename}）")
-
 st.divider()
 
 # ===== 新規レジメン登録 =====
