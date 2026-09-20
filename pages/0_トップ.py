@@ -48,7 +48,6 @@ st.divider()
 
 # ===== 新規レジメン登録 =====
 st.subheader("🆕 新規レジメン登録")
-st.subheader("🆕 新規レジメン登録")
 
 with st.container(border=True):
     st.markdown("#### 📋 レジメン情報抽出・登録")
