@@ -18,6 +18,16 @@ st.title("💊 ケモテンプレート生成システム")
 st.subheader("東北大学病院 薬剤部")
 st.divider()
 
+# ===== 一時デバッグ：manualsフォルダの中身を確認 =====
+with st.expander("🔧 デバッグ：manualsフォルダの中身", expanded=True):
+    if MANUAL_DIR.exists():
+        all_pdfs = list(MANUAL_DIR.glob("*.pdf"))
+        st.write(f"見つかったPDFファイル数: {len(all_pdfs)}")
+        for f in all_pdfs:
+            st.code(f"ファイル名: {f.name}\nrepr: {repr(f.name)}\nbytes: {f.name.encode('utf-8')}")
+    else:
+        st.error(f"MANUAL_DIRが存在しません: {MANUAL_DIR}")
+        
 # ===== マニュアル =====
 st.subheader("📖 マニュアル")
 
