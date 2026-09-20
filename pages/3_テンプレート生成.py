@@ -2305,11 +2305,7 @@ if selected_basic:
     col2.metric("1コース日数", f"{selected_basic.get('1コース日数','?')}日")
     col3.metric("対象疾患", selected_basic.get('対象疾患','?'))
 
-    pd_cats = str(selected_basic.get('Pdカテゴリ', '')).strip()
-    if not pd_cats:
-        st.warning("⚠️ このレジメンのPdカテゴリが未設定です。下の副作用登録から設定してください。")
-    else:
-        st.success(f"✅ Pdカテゴリ設定済み：{pd_cats}")
+    # 旧方式のPdカテゴリ表示は削除（新方式では種別＋名称一致で自動判定するため不要）
 
     # ===== 抗がん剤副作用マスタ登録状況チェック =====
     # このレジメンの薬剤を取得
