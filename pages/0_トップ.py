@@ -1,7 +1,7 @@
 import streamlit as st
 import pathlib
 
-MANUAL_DIR = pathlib.Path(__file__).resolve().parent / "manuals"
+MANUAL_DIR = pathlib.Path(__file__).resolve().parent.parent / "manuals"
 
 st.set_page_config(
     page_title="ケモテンプレートシステム",
