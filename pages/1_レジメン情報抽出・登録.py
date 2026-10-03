@@ -990,6 +990,7 @@ if "extracted_parsed" in st.session_state and not st.session_state.get("register
                             get_val(drug,"figure_flag","flag_chart"),
                             get_val(drug,"manual_flag","flag_leaflet"),
                             get_val(drug,"remarks","note"),
+                            get_val(drug,"oral_cancer_flag", default=""),
                         ]
                         ws_drug.append_row(drug_row, value_input_option="USER_ENTERED")
 
