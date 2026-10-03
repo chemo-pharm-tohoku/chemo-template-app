@@ -902,12 +902,18 @@ if "extracted_parsed" in st.session_state:
                 f"{m.get('一般名（全角）','')}（{m.get('採用商品名（全角）','')}）": m
                 for m in oral_cancer_candidates
             }
+            st.caption(
+                f"💡 {len(options_map)}件の内服抗がん薬を登録済みです。"
+                "下のボックスに薬剤名を入力すると候補が絞り込まれます。"
+            )
             selected_label = st.selectbox(
-                "内服抗がん薬を選択してください",
+                "下記、指示文を参照し、内服抗がん薬を選択してください。",
                 options=list(options_map.keys()),
+                index=None,
+                placeholder="薬剤名を入力して検索...",
                 key="oral_cancer_select",
             )
-            selected_master = options_map[selected_label]
+            selected_master = options_map.get(selected_label) if selected_label else None
 
             oc_dosage_text = st.text_area(
                 "投与量の指示文（備考欄の内容を元に整形してください）",
@@ -916,17 +922,28 @@ if "extracted_parsed" in st.session_state:
                 key="oral_cancer_dosage_text",
                 placeholder="（1日2回,d1-14）（BSA<1.36: 1.2g/回, 1.36≦BSA<1.66: 1.5g/回, ...）",
             )
-            oc_day_text = st.text_input(
-                "投与Day文字（例：day: 1-14）",
-                value="",
-                key="oral_cancer_day_text",
-            )
+            col_day1, col_day2 = st.columns([1, 4])
+            with col_day1:
+                st.markdown(
+                    "<div style='padding-top:28px; text-align:right; "
+                    "font-weight:bold;'>day:</div>",
+                    unsafe_allow_html=True,
+                )
+            with col_day2:
+                oc_day_number = st.text_input(
+                    "投与Day（数字のみ入力。例：1-14 　 1,8,15）",
+                    value="",
+                    key="oral_cancer_day_number",
+                    placeholder="1-14",
+                )
+            oc_day_text = f"day: {oc_day_number.strip()}" if oc_day_number.strip() else ""
 
             if st.button(
                 "➕ 内服抗がん薬を薬剤情報に追加する",
                 key="btn_add_oral_cancer",
                 type="primary",
                 use_container_width=True,
+                disabled=(selected_master is None),
             ):
                 drugs_current = get_drugs(parsed)
                 new_drug = {
