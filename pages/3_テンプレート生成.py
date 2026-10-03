@@ -2765,17 +2765,29 @@ if selected_basic and result:
         _components.html(_html, height=50)
 
     # ── 表示 ──
-    st.markdown("**① A1セルに貼り付け：パラメータ入力欄（A〜D列）**")
+    st.markdown(
+        "① <span style='font-size:22px; font-weight:bold; color:#1976D2;'>A1セル</span>"
+        "に貼り付け：パラメータ入力欄（A〜D列）",
+        unsafe_allow_html=True
+    )
     st.caption("B列にパラメーター数値入力。C列に処方量数値が入ると D列（％）が自動計算されます。")
     # st.text_area("パラメータ入力欄", value=_param_tsv, height=280, key=f"tsv_param_{protocol_no}")
     _copy_btn(_param_tsv, "📋 パラメータ欄をコピー　A1セルに貼り付け", "#1976D2")
 
-    st.markdown("**② G1セルに貼り付け：O欄・Pd欄**")
+    st.markdown(
+        "② <span style='font-size:22px; font-weight:bold; color:#7B1FA2;'>G1セル</span>"
+        "に貼り付け：O欄・Pd欄",
+        unsafe_allow_html=True
+    )
     st.caption("理論値・処方量・達成率は①のB・C列を自動参照します。")
     # st.text_area("O欄・Pd欄", value=_o_tsv, height=180, key=f"tsv_o_{protocol_no}")
     _copy_btn(_o_tsv, "📋 O欄・Pd欄をコピー　G1セルに貼り付け", "#7B1FA2")
 
-    st.markdown("**③ O1セルに貼り付け：手帳シール**")
+    st.markdown(
+        "③ <span style='font-size:22px; font-weight:bold; color:#388E3C;'>O1セル</span>"
+        "に貼り付け：手帳シール",
+        unsafe_allow_html=True
+    )
     st.caption("処方量は①のC列を自動参照します。")
     # st.text_area("手帳シール", value=_seal_tsv, height=180, key=f"tsv_seal_{protocol_no}")
     _copy_btn(_seal_tsv, "📋 手帳シールをコピー　O1セルに貼り付け", "#388E3C")
