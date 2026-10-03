@@ -950,7 +950,7 @@ def build_o_pd_sheet(wb, protocol_no, basic_data, drug_data,
     row += 1
     cell_write(ws, row, 1,
                "化学療法のしおり、メーカー作成パンフレット（パンフレット名記載）、"
-               "添付する説明書を用いて、化学療法について説明"
+               "添付する説明書を用いて、化学療法について指導"
                "（治療スケジュール、支持療法、副作用/対策）を行った。",
                fnt=font(10), fill=FILL_PD, wrap=True)
     ws.row_dimensions[row].height = 35
@@ -2678,7 +2678,7 @@ if selected_basic and result:
         if _ae_flags_tsv.get(_cat_name_tsv, False) or _cat_name_tsv in _drug_names_for_pd_tsv:
             _matched_pda.append(p)
     _o_lines.append("Pd；ご本人に対して初回面談実施。服薬状況、服薬理解度および有害事象の発現状況の確認を行った。\t\t\t\t\t\t")
-    _o_lines.append("化学療法のしおり、メーカー作成パンフレット（パンフレット名記載）、添付する説明書を用いて説明した。\t\t\t\t\t\t")
+    _o_lines.append("化学療法のしおり、メーカー作成パンフレット（パンフレット名記載）、添付する説明書を用いて指導した。\t\t\t\t\t\t")
     for _pda in _matched_pda:
         _cat  = str(_pda.get("カテゴリ名","")).strip()
         _text = str(_pda.get("説明文","")).strip().replace("\n","　").replace("\r","")
