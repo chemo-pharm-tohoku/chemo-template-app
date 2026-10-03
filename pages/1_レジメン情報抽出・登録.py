@@ -869,6 +869,102 @@ if "extracted_parsed" in st.session_state:
         st.write(f"**備考：** {basic_json.get('remarks','')}")
         st.write(f"**登録日：** {basic_json.get('registration_date','')}")
 
+    # ===== 内服抗がん薬チェック =====
+    st.divider()
+    st.markdown("#### 💊 内服抗がん薬の確認")
+    remarks_text = str(basic_json.get('remarks', '')).strip()
+    if remarks_text:
+        st.info(f"📝 備考欄の内容：\n\n{remarks_text}")
+    else:
+        st.caption("備考欄に記載はありませんでした。")
+
+    oral_cancer_choice = st.radio(
+        "この確認票に、内服抗がん薬の指示（備考欄等）はありますか？",
+        options=["いいえ（内服抗がん薬なし）", "はい（内服抗がん薬あり）"],
+        index=0,
+        key="oral_cancer_radio",
+        horizontal=True,
+    )
+
+    if oral_cancer_choice == "はい（内服抗がん薬あり）":
+        master_data_oc, _ = load_master_data()
+        oral_cancer_candidates = [
+            m for m in master_data_oc
+            if str(m.get("管理コード", "")).strip().upper().startswith("ACO")
+        ]
+        if not oral_cancer_candidates:
+            st.warning(
+                "⚠️ 薬品マスタに内服抗がん薬（管理コードACO〜）が登録されていません。"
+                "先に薬品マスタへ登録してください。"
+            )
+        else:
+            options_map = {
+                f"{m.get('一般名（全角）','')}（{m.get('採用商品名（全角）','')}）": m
+                for m in oral_cancer_candidates
+            }
+            selected_label = st.selectbox(
+                "内服抗がん薬を選択してください",
+                options=list(options_map.keys()),
+                key="oral_cancer_select",
+            )
+            selected_master = options_map[selected_label]
+
+            oc_dosage_text = st.text_area(
+                "投与量の指示文（備考欄の内容を元に整形してください）",
+                value=remarks_text,
+                height=100,
+                key="oral_cancer_dosage_text",
+                placeholder="（1日2回,d1-14）（BSA<1.36: 1.2g/回, 1.36≦BSA<1.66: 1.5g/回, ...）",
+            )
+            oc_day_text = st.text_input(
+                "投与Day文字（例：day: 1-14）",
+                value="",
+                key="oral_cancer_day_text",
+            )
+
+            if st.button(
+                "➕ 内服抗がん薬を薬剤情報に追加する",
+                key="btn_add_oral_cancer",
+                type="primary",
+                use_container_width=True,
+            ):
+                drugs_current = get_drugs(parsed)
+                new_drug = {
+                    "order": "内服",
+                    "management_code": str(selected_master.get("管理コード", "")).strip(),
+                    "product_name": str(selected_master.get("採用商品名（全角）", "")).strip(),
+                    "dosage_value": oc_dosage_text.strip(),
+                    "dosage_unit": "",
+                    "dosage_basis": "テキスト表示",
+                    "admin_day_text": oc_day_text.strip(),
+                    "admin_day_numeric": "",
+                    "admin_timing": "",
+                    "diluent_volume": "",
+                    "admin_time_text": "",
+                    "admin_time_numeric": "",
+                    "anticancer_flag": "",
+                    "support_flag": "",
+                    "seal_flag": "",
+                    "figure_flag": "",
+                    "manual_flag": "",
+                    "remarks": "",
+                    "oral_cancer_flag": "○",
+                }
+                drugs_current.append(new_drug)
+                if "drug_info" in parsed:
+                    parsed["drug_info"] = drugs_current
+                else:
+                    parsed["drugs"] = drugs_current
+                st.session_state["extracted_parsed"] = parsed
+                st.session_state["extracted_json"] = json.dumps(
+                    parsed, ensure_ascii=False, indent=2
+                )
+                st.success(
+                    f"✅ {selected_master.get('一般名（全角）','')} を薬剤情報に追加しました！"
+                    "下の薬剤情報一覧をご確認ください。"
+                )
+                st.rerun()
+
     st.markdown("#### 💊 薬剤情報")
     if drug_list:
         import pandas as pd
