@@ -553,7 +553,7 @@ def build_opd_text(protocol_no, basic_data, drug_data,
     )
     lines.append(
         "化学療法のしおり、メーカー作成パンフレット（パンフレット名記載）、"
-        "添付する説明書を用いて、化学療法について説明"
+        "添付する説明書を用いて、化学療法について指導"
         "（治療スケジュール、支持療法、副作用/対策）を行った。"
     )
 
@@ -563,22 +563,6 @@ def build_opd_text(protocol_no, basic_data, drug_data,
     lines.append(
         "・代表的な有害事象（" + "・".join(ae_label_parts) + "）の対処法は以下の通り指導した。"
     )
-
-    lines.append(PD_TEXTS["骨髄抑制"])
-    lines.append(PD_TEXTS["悪心嘔吐"])
-
-    CONDITIONAL_PD = [
-        ("末梢神経障害", "末梢神経障害"),
-        ("口腔粘膜炎",  "口腔粘膜炎"),
-        ("脱毛",        "脱毛"),
-        ("下痢",        "下痢"),
-        ("手足症候群",  "手足症候群"),
-        ("irAE",        "irAE"),
-        ("IRR",         "IRR"),
-    ]
-    for flag_key, pd_key in CONDITIONAL_PD:
-        if ae_flags.get(flag_key, False) and pd_key in PD_TEXTS:
-            lines.append(PD_TEXTS[pd_key])
 
     for pda in matched_pda:
         cat_name = str(pda.get('カテゴリ名', '')).strip()
