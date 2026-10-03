@@ -243,7 +243,7 @@ INJECTION_ORDER = {
 }
 
 def build_o_text(protocol_no, basic_data, drug_data, master_data,
-                 bsa, bw, ccr, start_date, course_num):
+                 bsa, bw, scr, ccr, start_date, course_num):
     """O欄テキストを文字列で生成して返す。"""
     result = get_regimen(protocol_no, basic_data, drug_data, master_data)
     if result is None:
@@ -271,12 +271,14 @@ def build_o_text(protocol_no, basic_data, drug_data, master_data,
         f"(1ｸｰﾙ{basic['1コース日数']}日)"
     )
 
-    # 2行目：患者情報
+    # 2行目：患者情報（3_テンプレート生成.pyと表示項目を統一：BSA・BW・SCr・Ccr）
     patient_parts = []
     if bsa is not None:
         patient_parts.append(f"BSA：{bsa:.3f} m2")
     if bw is not None:
         patient_parts.append(f"BW：{bw:.1f} kg")
+    if scr is not None:
+        patient_parts.append(f"SCr：{scr}")
     if ccr is not None:
         patient_parts.append(f"Ccr：{ccr:.1f} mL/min")
     if patient_parts:
@@ -426,7 +428,7 @@ IRAE_ITEMS = [
 
 def build_opd_text(protocol_no, basic_data, drug_data,
                    master_data, ae_data, pd_data,
-                   bsa, bw, ccr, start_date, course_num):
+                   bsa, bw, scr, ccr, start_date, course_num):
     """O欄＋Pd欄 全テキストを生成して返す。"""
     ae_flags = get_ae_flags(protocol_no, drug_data, ae_data)
     has_irae = ae_flags.get("irAE", False)
@@ -466,7 +468,7 @@ def build_opd_text(protocol_no, basic_data, drug_data,
     # ブロック1：O欄本文
     o_text = build_o_text(
         protocol_no, basic_data, drug_data, master_data,
-        bsa, bw, ccr, start_date, course_num
+        bsa, bw, scr, ccr, start_date, course_num
     )
     lines.append(o_text)
     lines.append("")
@@ -597,11 +599,13 @@ if result:
     cancer_drugs = [d for d in result['drugs']
                     if str(d.get('①O欄_抗がん剤', '')) == '○']
 
-need_bsa = any(str(d.get('用量根拠', '')) == 'BSA依存'             for d in cancer_drugs)
-need_ccr = any(str(d.get('用量根拠', '')) == 'AUC依存'             for d in cancer_drugs)
-need_bw  = any(str(d.get('用量根拠', '')) in ('BW依存', 'AUC依存') for d in cancer_drugs)
-need_age = need_ccr
-need_sex = need_ccr
+# 部員要望：BSA・BW・SCr・Ccrは計算に使わないレジメンでも
+# 常に入力・O欄表示できるようにする（3_テンプレート生成.pyと仕様統一）
+need_bsa = True
+need_ccr = True
+need_bw  = True
+need_age = True
+need_sex = True
 
 st.divider()
 
@@ -727,7 +731,7 @@ if st.button(
         full_text = build_opd_text(
             protocol_no, basic_data, drug_data,
             master_data, ae_data, pd_data,
-            bsa, bw, ccr, start_date, course_num
+            bsa, bw, scr, ccr, start_date, course_num
         )
     st.session_state["p6_generated_text"] = full_text
 
