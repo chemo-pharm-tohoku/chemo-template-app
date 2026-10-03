@@ -588,11 +588,7 @@ if selected_basic:
     col2.metric("1コース日数",    f"{selected_basic.get('1コース日数', '?')}日")
     col3.metric("対象疾患",       selected_basic.get('対象疾患', '?'))
 
-    pd_cats = str(selected_basic.get('Pdカテゴリ', '')).strip()
-    if pd_cats:
-        st.success(f"✅ Pdカテゴリ：{pd_cats}")
-    else:
-        st.warning("⚠️ Pdカテゴリ未設定です。3_テンプレート生成ページから設定してください。")
+    # Pdカテゴリ列は物理削除済み（新方式へ完全移行のため不要）
 
 # 必要なパラメーターを判定
 result = get_regimen(protocol_no, basic_data, drug_data, master_data)
@@ -778,4 +774,4 @@ if "p6_generated_text" in st.session_state:
     st.caption("⚠️ 生成されたテキストは必ず内容を確認してから使用してください")
 
 st.divider()
-st.caption("💡 Pdカテゴリの設定・変更は **3_テンプレート生成** ページから行ってください")
+st.caption("💡 Pdカテゴリ（有害事象ごとの説明文）の追加・修正は、スプレッドシートの「Pd」シートで直接行ってください")
