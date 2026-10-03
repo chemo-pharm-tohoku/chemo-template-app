@@ -1473,11 +1473,23 @@ def create_excel(protocol_no, basic_data, drug_data,
     support_line1 = ('"支持療法：' + '､'.join(inj_parts) + '"') if inj_parts else None
     support_line2 = ('"　　　　　' + '､'.join(oral_parts) + '"') if oral_parts else None
 
+    # 内服抗がん薬行（新方式：テキスト表示をそのまま出力）
+    oral_cancer_drugs = [d for d in drugs if str(d.get('①O欄_内服抗がん薬','')) == '○']
+    oral_cancer_parts = []
+    for d in oral_cancer_drugs:
+        code_oc   = str(d.get('管理コード',''))
+        master_oc = master_dict.get(code_oc, {})
+        name_oc   = to_half_kana(str(master_oc.get('一般名（全角）','') or d.get('商品名','')))
+        text_oc   = str(d.get('投与量数値','') or '').strip()
+        oral_cancer_parts.append(f"{name_oc}{text_oc}")
+    oral_cancer_line = ('"内服抗がん薬：' + '､'.join(oral_cancer_parts) + '"') if oral_cancer_parts else None
+
     all_lines = [line1]
     if line2: all_lines += ['"  "', line2]
     all_lines += ['"  "'] + drug_lines
     if support_line1: all_lines += ['"  "', support_line1]
     if support_line2: all_lines.append(support_line2)
+    if oral_cancer_line: all_lines.append(oral_cancer_line)
 
     ws2['A2'] = '=' + '&CHAR(10)&'.join(all_lines)
     ws2['A2'].alignment = Alignment(wrap_text=True, vertical='top')
@@ -2410,6 +2422,7 @@ if selected_basic and result:
     _support_oral = [d for d in _drugs
                      if str(d.get("①O欄_支持療法",""))=="○"
                      and str(d.get("投与順序",""))=="内服"]
+    _oral_cancer_drugs = [d for d in _drugs if str(d.get("①O欄_内服抗がん薬",""))=="○"]
 
     # 部員要望：体表面積・体重・腎機能は全レジメン共通で常時入力欄を表示
     _need_bsa = True
@@ -2579,9 +2592,19 @@ if selected_basic and result:
         _ds, _us = format_dose_text(_d)
         _oral_parts.append(f"{_nh} {_ds}{_us}({_d.get('投与Day文字','')})")
     if _inj_parts:
+    if _inj_parts:
         _o_lines.append(f"支持療法：{'、'.join(_inj_parts)}\t\t\t\t\t")
     if _oral_parts:
         _o_lines.append(f"　　　　　{'、'.join(_oral_parts)}\t\t\t\t\t")
+    if _oral_cancer_drugs:
+        _oc_parts = []
+        for _d in _oral_cancer_drugs:
+            _code = str(_d.get("管理コード",""))
+            _m    = _mdict.get(_code, {})
+            _nh   = to_half_kana(str(_m.get("一般名（全角）","") or _d.get("商品名","")))
+            _text_val = str(_d.get("投与量数値","") or "").strip()
+            _oc_parts.append(f"{_nh}{_text_val}")
+        _o_lines.append(f"内服抗がん薬：{'、'.join(_oc_parts)}\t\t\t\t\t")
     # ── HBV〜Pd欄テキストを取得して追加 ──
 
     _ae_flags_tsv = {}
