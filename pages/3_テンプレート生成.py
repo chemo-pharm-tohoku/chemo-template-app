@@ -2434,11 +2434,11 @@ if selected_basic and result:
     _param_lines = [
         "【パラメーター入力】\t\t\t",
         "【患者情報】\t\t\t",
-        f"体重(kg)\t\t{'←入力' if _need_bw else _mark(_need_bw)}",
-        f"BSA(m²)\t\t{'←入力' if _need_bsa else _mark(_need_bsa)}",
-        f"SCr\t\t{'←入力' if _need_ccr else _mark(_need_ccr)}",
-        f"年齢\t\t{'←入力' if _need_ccr else _mark(_need_ccr)}",
-        "性別係数\t\t" + ("←入力\t1（男）または 0.85（女）" if _need_ccr else _mark(_need_ccr)),
+        f"体重(kg)\t\t{'←【入力】' if _need_bw else _mark(_need_bw)}",
+        f"BSA(m²)\t\t{'←【入力】' if _need_bsa else _mark(_need_bsa)}",
+        f"SCr\t\t{'←【入力】' if _need_ccr else _mark(_need_ccr)}",
+        f"年齢\t\t{'←【入力】' if _need_ccr else _mark(_need_ccr)}",
+        "性別係数\t\t" + ("←【入力】\t1（男）または 0.85（女）" if _need_ccr else _mark(_need_ccr)),
     ]
 
     if _need_ccr:
@@ -2448,11 +2448,11 @@ if selected_basic and result:
         _param_lines.append("Ccr(mL/min)\t\t×入力不要")
 
     _param_lines += [
-        f"開始日\t\t←入力（YYYY/M/D形式）",
-        f"コース目\t\t←入力（数値）",
+        f"開始日\t\t←【入力】（YYYY/M/D形式）",
+        f"コース目\t\t←【入力】（数値）",
         "",
         "【投与量】\t\t\t",
-        f"\t\t↓入力\t",
+        f"\t\t↓【入力】\t",
         "薬剤名\t理論値(mg)\t処方量(mg)\t%",
     ]
 
