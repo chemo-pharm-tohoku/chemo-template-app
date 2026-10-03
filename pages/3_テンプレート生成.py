@@ -147,6 +147,10 @@ def parse_days_num(day_str):
     return sorted(set(days))
 
 def format_dose_text(drug):
+    dose_base = str(drug.get('用量根拠', ''))
+    if dose_base == 'テキスト表示':
+        raw_text = str(drug.get('投与量数値', '') or '').strip()
+        return raw_text, ''
     try:
         _rv = str(drug.get('投与量数値', '') or '').strip()
         _rv = ''.join(c for c in _rv if c.isdigit() or c == '.')
@@ -154,7 +158,6 @@ def format_dose_text(drug):
     except:
         dose = 0
     unit_input = str(drug.get('投与単位', '')).strip()
-    dose_base  = str(drug.get('用量根拠', ''))
     v_to_mg    = drug.get('1V当たりmg', '')
     if unit_input.upper() == 'V':
         if v_to_mg != '' and str(v_to_mg).strip() != '':
