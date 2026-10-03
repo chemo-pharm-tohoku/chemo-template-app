@@ -387,8 +387,10 @@ def build_o_text(protocol_no, basic_data, drug_data, master_data,
             name = to_half_kana(
                 str(master_oc.get('一般名（全角）', '') or d.get('商品名', ''))
             )
+            day_val = str(d.get('投与Day文字', '') or '').strip()
+            day_part = f"({day_val})" if day_val else ""
             text_val = str(d.get('投与量数値', '') or '').strip()
-            oral_cancer_parts.append(f"{name}{text_val}")
+            oral_cancer_parts.append(f"{name}{day_part}{text_val}")
         lines.append("内服抗がん薬：" + "､".join(oral_cancer_parts))
 
     return "\n".join(lines)
