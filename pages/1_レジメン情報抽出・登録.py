@@ -990,7 +990,7 @@ if "extracted_parsed" in st.session_state:
                 st.session_state.pop("yonin_confirmed_1", None)
                 st.session_state.pop("json_editor_text", None)
                 for _k in list(st.session_state.keys()):
-                    if _k.startswith("step35_"):
+                    if _k.startswith("step35_") or _k.startswith("oral_cancer_"):
                         del st.session_state[_k]
                 st.success("✅ 反映しました！")
                 st.rerun()
@@ -1179,7 +1179,7 @@ if st.session_state.get("registered"):
         ]:
             st.session_state.pop(key, None)
         for key in list(st.session_state.keys()):
-            if key.startswith("step35_") or key.startswith("yonin1_"):
+            if key.startswith("step35_") or key.startswith("yonin1_") or key.startswith("oral_cancer_"):
                 del st.session_state[key]
         st.rerun()
 else:
