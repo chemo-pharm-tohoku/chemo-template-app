@@ -63,6 +63,10 @@ def load_all_data():
 # ===== 投与量計算ヘルパー =====
 
 def format_dose_text(drug):
+    dose_base = str(drug.get('用量根拠', ''))
+    if dose_base == 'テキスト表示':
+        raw_text = str(drug.get('投与量数値', '') or '').strip()
+        return raw_text, ''
     try:
         _rv = str(drug.get('投与量数値', '') or '').strip()
         _rv = ''.join(c for c in _rv if c.isdigit() or c == '.')
@@ -70,7 +74,6 @@ def format_dose_text(drug):
     except:
         dose = 0
     unit_input = str(drug.get('投与単位', '')).strip()
-    dose_base  = str(drug.get('用量根拠', ''))
     v_to_mg    = drug.get('1V当たりmg', '')
     if unit_input.upper() == 'V':
         if v_to_mg != '' and str(v_to_mg).strip() != '':
@@ -92,6 +95,8 @@ def format_dose_text(drug):
 def calc_dose(drug, bsa, bw, ccr):
     """投与量を計算して文字列で返す。未入力・計算不能の場合は '未入力' を返す。"""
     dose_base = str(drug.get('用量根拠', ''))
+    if dose_base == 'テキスト表示':
+        return str(drug.get('投与量数値', '') or '').strip()
     try:
         _rv = str(drug.get('投与量数値', '') or '').strip()
         _rv = ''.join(c for c in _rv if c.isdigit() or c == '.')
@@ -125,6 +130,8 @@ def calc_dose(drug, bsa, bw, ccr):
 def calc_dose_num(drug, bsa, bw, ccr):
     """計算値を数値で返す（達成率計算用）。計算不能な場合はNoneを返す。"""
     dose_base = str(drug.get('用量根拠', ''))
+    if dose_base == 'テキスト表示':
+        return None
     try:
         _rv = str(drug.get('投与量数値', '') or '').strip()
         _rv = ''.join(c for c in _rv if c.isdigit() or c == '.')
@@ -262,6 +269,8 @@ def build_o_text(protocol_no, basic_data, drug_data, master_data,
     support_oral_all = [d for d in drugs
                         if str(d.get('①O欄_支持療法', '')) == '○'
                         and str(d.get('投与順序', '')) == '内服']
+    oral_cancer_drugs = [d for d in drugs
+                        if str(d.get('①O欄_内服抗がん薬', '')) == '○']
 
     lines = []
 
@@ -368,6 +377,19 @@ def build_o_text(protocol_no, basic_data, drug_data, master_data,
             day = str(d.get('投与Day文字', ''))
             oral_parts.append(f"{name} {ds}{us}({day})")
         lines.append("　　　　　" + "､".join(oral_parts))
+
+    # 内服抗がん薬行（新方式：テキスト表示をそのまま出力）
+    if oral_cancer_drugs:
+        oral_cancer_parts = []
+        for d in oral_cancer_drugs:
+            code = str(d.get('管理コード', ''))
+            master_oc = master_dict.get(code, {})
+            name = to_half_kana(
+                str(master_oc.get('一般名（全角）', '') or d.get('商品名', ''))
+            )
+            text_val = str(d.get('投与量数値', '') or '').strip()
+            oral_cancer_parts.append(f"{name}{text_val}")
+        lines.append("内服抗がん薬：" + "､".join(oral_cancer_parts))
 
     return "\n".join(lines)
 
