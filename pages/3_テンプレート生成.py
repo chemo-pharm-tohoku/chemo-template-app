@@ -1483,8 +1483,10 @@ def create_excel(protocol_no, basic_data, drug_data,
         code_oc   = str(d.get('管理コード',''))
         master_oc = master_dict.get(code_oc, {})
         name_oc   = to_half_kana(str(master_oc.get('一般名（全角）','') or d.get('商品名','')))
+        day_oc      = str(d.get('投与Day文字','') or '').strip()
+        day_part_oc = f"({day_oc})" if day_oc else ""
         text_oc   = str(d.get('投与量数値','') or '').strip()
-        oral_cancer_parts.append(f"{name_oc}{text_oc}")
+        oral_cancer_parts.append(f"{name_oc}{day_part_oc}{text_oc}")
     oral_cancer_line = ('"内服抗がん薬：' + '､'.join(oral_cancer_parts) + '"') if oral_cancer_parts else None
 
     all_lines = [line1]
@@ -2605,9 +2607,12 @@ if selected_basic and result:
             _code = str(_d.get("管理コード",""))
             _m    = _mdict.get(_code, {})
             _nh   = to_half_kana(str(_m.get("一般名（全角）","") or _d.get("商品名","")))
+            _day_val  = str(_d.get("投与Day文字","") or "").strip()
+            _day_part = f"({_day_val})" if _day_val else ""
             _text_val = str(_d.get("投与量数値","") or "").strip()
-            _oc_parts.append(f"{_nh}{_text_val}")
+            _oc_parts.append(f"{_nh}{_day_part}{_text_val}")
         _o_lines.append(f"内服抗がん薬：{'、'.join(_oc_parts)}\t\t\t\t\t")
+        
     # ── HBV〜Pd欄テキストを取得して追加 ──
 
     _ae_flags_tsv = {}
