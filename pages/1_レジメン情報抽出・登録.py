@@ -959,9 +959,17 @@ if "extracted_parsed" in st.session_state and not st.session_state.get("register
                             ws_drug.delete_rows(i)
 
                     basic_row = [
-                        protocol_no, regimen_name, disease, "",
+                        protocol_no,
+                        regimen_name,
+                        disease,
+                        "",
                         course_days if course_days else "要確認",
-                        "","","","", today, "",
+                        "",
+                        "",
+                        "",
+                        get_val(info, "remarks", "備考", default=""),
+                        today,
+                        "",
                     ]
                     ws_basic.append_row(basic_row, value_input_option="USER_ENTERED")
 
