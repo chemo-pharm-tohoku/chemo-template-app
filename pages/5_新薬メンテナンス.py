@@ -394,13 +394,78 @@ if pending_match:
                         except Exception as e:
                             st.error(f"❌ 紐付けエラー: {e}")
         else:
-            st.caption("　薬品マスタに一致候補が見つかりませんでした。新規登録が必要です。")
-            if st.button(
-                f"➕ 「{product_name}」を登録フォームに読み込む",
-                key=f"btn_load_pending_{product_name}",
-            ):
-                st.session_state["newdrug_brand_prefill"] = product_name
-                st.rerun()
+            st.caption("　薬品マスタに自動一致候補が見つかりませんでした。")
+
+            manual_mode_key = f"manual_search_mode_{product_name}"
+            col_manual, col_new = st.columns(2)
+            with col_manual:
+                if st.button(
+                    "🔍 既存の薬品マスタから手動で探す",
+                    key=f"btn_manual_search_{product_name}",
+                    use_container_width=True,
+                ):
+                    st.session_state[manual_mode_key] = True
+                    st.rerun()
+            with col_new:
+                if st.button(
+                    f"➕ 新規登録する",
+                    key=f"btn_load_pending_{product_name}",
+                    use_container_width=True,
+                ):
+                    st.session_state["newdrug_brand_prefill"] = product_name
+                    st.rerun()
+
+            if st.session_state.get(manual_mode_key):
+                all_options = {
+                    f"{str(m.get('管理コード','')).strip()}："
+                    f"{str(m.get('一般名（全角）','')).strip()}"
+                    f"（{str(m.get('採用商品名（全角）','')).strip()}）": m
+                    for m in master_data
+                    if str(m.get('管理コード', '')).strip()
+                }
+                manual_selected = st.selectbox(
+                    f"「{product_name}」に対応する薬品マスタを検索・選択してください",
+                    options=["選択してください"] + list(all_options.keys()),
+                    key=f"manual_select_{product_name}",
+                    placeholder="薬剤名を入力して検索...",
+                )
+                if manual_selected != "選択してください":
+                    manual_cand = all_options[manual_selected]
+                    manual_cand_code = str(manual_cand.get('管理コード', '')).strip()
+                    if st.button(
+                        f"✅ {manual_cand_code} に紐付ける",
+                        key=f"btn_manual_fix_{product_name}_{manual_cand_code}",
+                        type="primary",
+                        use_container_width=True,
+                    ):
+                        try:
+                            gc = get_gspread_client()
+                            sh = gc.open_by_url(SPREADSHEET_URL)
+                            ws_drug = sh.worksheet("薬剤情報")
+                            all_vals = ws_drug.get_all_values()
+                            headers_drug = all_vals[0]
+                            code_col_idx = headers_drug.index('管理コード') + 1
+                            name_col_idx = headers_drug.index('商品名') + 1
+                            from openpyxl.utils import get_column_letter as gcl
+                            updated_count = 0
+                            for i, row in enumerate(all_vals[1:], start=2):
+                                if (len(row) >= max(code_col_idx, name_col_idx)
+                                        and is_pending_code(row[code_col_idx - 1])
+                                        and row[name_col_idx - 1].strip() == product_name):
+                                    ws_drug.update(
+                                        range_name=f'{gcl(code_col_idx)}{i}',
+                                        values=[[manual_cand_code]],
+                                    )
+                                    updated_count += 1
+                            st.success(
+                                f"✅ 「{product_name}」の{updated_count}件を"
+                                f"{manual_cand_code}に紐付けました！"
+                            )
+                            st.session_state.pop(manual_mode_key, None)
+                            fetch_sheet_realtime.clear()
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"❌ 紐付けエラー: {e}")
 else:
     st.success("✅ 「要確認」のままになっている薬剤はありません")
 
