@@ -19,26 +19,6 @@ st.subheader("東北大学病院 薬剤部")
 st.divider()
         
 
-# ===== 新規レジメン登録 =====
-st.subheader("🆕 新規レジメン登録")
-
-with st.container(border=True):
-    st.markdown("#### 📋 レジメン情報抽出・登録")
-    st.write(
-        "確認票のテキストを貼り付けると "
-        "AIが自動解析 → スプレッドシート登録 "
-        "→ スケジュールシール生成まで一気通貫"
-    )
-    if st.button(
-        "📋 レジメン情報抽出・登録へ",
-        type="primary",
-        use_container_width=True,
-        key="btn_top_1"
-    ):
-        st.switch_page("pages/1_レジメン情報抽出・登録.py")
-
-st.divider()
-
 with st.container(border=True):
     st.markdown("#### 📋 レジメン情報抽出・登録")
     st.write(
