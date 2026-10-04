@@ -327,11 +327,16 @@ def search_master_candidates(product_name_raw, master_data):
 
 master_codes = {str(m.get('管理コード', '')).strip() for m in master_data}
 
+def is_pending_code(code):
+    """「要確認」の表記ゆれ（全角スペース混入等）を吸収して判定する"""
+    normalized = re.sub(r'\s+', '', str(code))
+    return normalized == '要確認'
+
 # --- 「要確認」行（名称マッチング未済）の検出 ---
 pending_match = {}
 for d in drug_data:
     code = str(d.get('管理コード', '')).strip()
-    if code != '要確認':
+    if not is_pending_code(code):
         continue
     product_name = str(d.get('商品名', '')).strip()
     if not product_name:
@@ -342,6 +347,12 @@ for d in drug_data:
     })
     info['protocols'].add(str(d.get('プロトコールNo', '')).strip())
     info['rows'].append(d)
+
+# 診断用：missingに「要確認」系の文字列が紛れていないか確認表示
+if missing:
+    for code in list(missing.keys()):
+        if '要確認' in code or '確認' in code:
+            st.caption(f"🔍 診断：怪しいコードの文字コード一覧 → {[hex(ord(c)) for c in code]}")
 
 if pending_match:
     st.warning(f"⚠️ 管理コードが「要確認」の薬剤が {len(pending_match)} 種類あります")
@@ -405,7 +416,7 @@ st.divider()
 missing = {}
 for d in drug_data:
     code = str(d.get('管理コード', '')).strip()
-    if not code or code == '要確認' or code in master_codes:
+    if not code or is_pending_code(code) or code in master_codes:
         continue
     info = missing.setdefault(code, {
         'name': str(d.get('商品名', '')).strip(),
