@@ -39,20 +39,31 @@ with st.container(border=True):
 
 st.divider()
 
-# ===== テンプレート生成 =====
-st.subheader("📄 テンプレート生成")
+with st.container(border=True):
+    st.markdown("#### 📋 レジメン情報抽出・登録")
+    st.write(
+        "確認票のテキストを貼り付けると "
+        "AIが自動解析 → スプレッドシート登録 "
+        "→ スケジュールシール生成まで一気通貫"
+    )
+    if st.button(
+        "📋 レジメン情報抽出・登録へ",
+        type="primary",
+        use_container_width=True,
+        key="btn_top_1"
+    ):
+        st.switch_page("pages/1_レジメン情報抽出・登録.py")
 
 col_l, col_r = st.columns(2)
 
 with col_l:
     with st.container(border=True):
-        st.markdown("#### 📊 テンプレート Excel 生成")
+        st.markdown("#### 📊 テンプレート 生成")
         st.write(
-            "登録済みレジメンから Excel、またはExcelに貼り付けるテキスト を生成。\n"
-            "副作用登録・Pd整合性チェックは「新薬メンテナンス」ページで行います。"
+            "登録済みレジメンから Excel、またはExcelに貼り付けるテキスト を生成。"
         )
         if st.button(
-            "📊 Excel 生成へ",
+            "📊 テンプレート生成へ",
             type="primary",
             use_container_width=True,
             key="btn_top_3"
@@ -179,9 +190,16 @@ with st.container(border=True):
         )
     with col2:
         st.caption(
-            "テンプレート生成ページでレジメンの副作用を登録する際の "
-            "チェックボックスが表示されます。"
+            "O欄（モニタリング項目条件表示）・Pd欄（説明事項）のON/OFFを制御します。"
         )
+        with st.expander("※O欄の副作用項目について"):
+            st.caption(
+                "【常時表示】と【条件表示】に分けています。\n\n"
+                "**常時表示**：嘔吐・悪心・食欲不振・便秘・倦怠感・骨髄抑制・"
+                "肝機能障害・腎機能障害・電解質異常・その他（全レジメン共通）\n\n"
+                "**条件表示**：下痢・口腔粘膜炎・脱毛・末梢神経障害・味覚異常・"
+                "IRR・手足症候群・皮膚障害・間質性肺炎・心障害"
+            )
 
     st.markdown("")
     st.warning("⚠️ 本マスタを編集するとシステム全体に影響します。")
