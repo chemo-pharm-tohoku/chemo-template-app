@@ -307,11 +307,105 @@ ae_columns = get_ae_columns(ae_data)
 st.subheader("① 薬品マスタ未登録チェック")
 st.caption("薬剤情報シートに登場するが、薬品マスタに存在しない管理コードを警告します")
 
+def normalize_for_match(text):
+    table = str.maketrans('', '', ' 　')
+    return str(text).translate(table).upper()
+
+def search_master_candidates(product_name_raw, master_data):
+    raw_norm = normalize_for_match(product_name_raw)
+    hits = []
+    for m in master_data:
+        code = str(m.get("管理コード", "")).strip()
+        if not code:
+            continue
+        for key in ("採用商品名（全角）", "一般名（全角）"):
+            candidate = str(m.get(key, "")).strip()
+            if candidate and len(candidate) >= 2 and normalize_for_match(candidate) in raw_norm:
+                hits.append(m)
+                break
+    return hits
+
 master_codes = {str(m.get('管理コード', '')).strip() for m in master_data}
+
+# --- 「要確認」行（名称マッチング未済）の検出 ---
+pending_match = {}
+for d in drug_data:
+    code = str(d.get('管理コード', '')).strip()
+    if code != '要確認':
+        continue
+    product_name = str(d.get('商品名', '')).strip()
+    if not product_name:
+        continue
+    info = pending_match.setdefault(product_name, {
+        'protocols': set(),
+        'rows': [],
+    })
+    info['protocols'].add(str(d.get('プロトコールNo', '')).strip())
+    info['rows'].append(d)
+
+if pending_match:
+    st.warning(f"⚠️ 管理コードが「要確認」の薬剤が {len(pending_match)} 種類あります")
+    for product_name, info in pending_match.items():
+        protocols_str = "、".join(sorted(info['protocols']))
+        st.markdown(f"**{product_name}**（使用レジメン：{protocols_str}）")
+        candidates = search_master_candidates(product_name, master_data)
+        if candidates:
+            for cand in candidates:
+                cand_code = str(cand.get('管理コード', '')).strip()
+                cand_name = str(cand.get('採用商品名（全角）', '') or cand.get('一般名（全角）', '')).strip()
+                col_info, col_btn = st.columns([3, 1])
+                with col_info:
+                    st.caption(f"→ 薬品マスタに一致候補：**{cand_code}**（{cand_name}）")
+                with col_btn:
+                    if st.button(
+                        "✅ 紐付ける",
+                        key=f"btn_fix_pending_{product_name}_{cand_code}",
+                    ):
+                        try:
+                            gc = get_gspread_client()
+                            sh = gc.open_by_url(SPREADSHEET_URL)
+                            ws_drug = sh.worksheet("薬剤情報")
+                            all_vals = ws_drug.get_all_values()
+                            headers_drug = all_vals[0]
+                            code_col_idx = headers_drug.index('管理コード') + 1
+                            name_col_idx = headers_drug.index('商品名') + 1
+                            from openpyxl.utils import get_column_letter as gcl
+                            updated_count = 0
+                            for i, row in enumerate(all_vals[1:], start=2):
+                                if (len(row) >= max(code_col_idx, name_col_idx)
+                                        and row[code_col_idx - 1].strip() == '要確認'
+                                        and row[name_col_idx - 1].strip() == product_name):
+                                    ws_drug.update(
+                                        range_name=f'{gcl(code_col_idx)}{i}',
+                                        values=[[cand_code]],
+                                    )
+                                    updated_count += 1
+                            st.success(
+                                f"✅ 「{product_name}」の{updated_count}件を"
+                                f"{cand_code}に紐付けました！"
+                            )
+                            fetch_sheet_realtime.clear()
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"❌ 紐付けエラー: {e}")
+        else:
+            st.caption("　薬品マスタに一致候補が見つかりませんでした。新規登録が必要です。")
+            if st.button(
+                f"➕ 「{product_name}」を登録フォームに読み込む",
+                key=f"btn_load_pending_{product_name}",
+            ):
+                st.session_state["newdrug_brand_prefill"] = product_name
+                st.rerun()
+else:
+    st.success("✅ 「要確認」のままになっている薬剤はありません")
+
+st.divider()
+
+# --- 薬品マスタに存在しないコード（純粋な未登録）の検出 ---
 missing = {}
 for d in drug_data:
     code = str(d.get('管理コード', '')).strip()
-    if not code or code in master_codes:
+    if not code or code == '要確認' or code in master_codes:
         continue
     info = missing.setdefault(code, {
         'name': str(d.get('商品名', '')).strip(),
@@ -363,11 +457,22 @@ else:
     default_kubun = PREFIX_DEFAULT_KUBUN.get(prefix, "")
     st.success(f"📌 発番予定の管理コード：**{new_code}**")
 
+name_full_preview = st.text_input(
+    "一般名（全角）　※入力すると既存マスタとの一致を自動検索します",
+    key="newdrug_name_full",
+)
+if name_full_preview.strip():
+    preview_candidates = search_master_candidates(name_full_preview, master_data)
+    if preview_candidates:
+        st.warning("⚠️ 薬品マスタに似た名称の薬剤が既に存在します。新規登録前にご確認ください：")
+        for cand in preview_candidates:
+            cand_code = str(cand.get('管理コード', '')).strip()
+            cand_name = str(cand.get('採用商品名（全角）', '') or cand.get('一般名（全角）', '')).strip()
+            st.caption(f"→ **{cand_code}**：{cand_name}（既存のこのコードを使用してください）")
+
 with st.form(key="form_newdrug"):
-    name_full = st.text_input(
-        "一般名（全角）",
-        key="newdrug_name_full",
-    )
+    name_full = name_full_preview
+    st.caption(f"一般名（全角）：**{name_full or '（未入力）'}**")
     brand_full = st.text_input(
         "採用商品名（全角）　※規格・銘柄名は省略し、一般名と同一表記で可",
         value=st.session_state.get("newdrug_brand_prefill", ""),
