@@ -550,6 +550,12 @@ if fixed_code:
         st.session_state.pop("newdrug_fixed_code", None)
         st.session_state.pop("newdrug_brand_prefill", None)
         st.rerun()
+brand_full = st.text_input(
+    "① 採用商品名（全角）　※規格・銘柄名は省略し、一般名と同一表記で可",
+    value=st.session_state.get("newdrug_brand_prefill", ""),
+    key="newdrug_brand_full",
+)
+
 name_full_preview = st.text_input(
     "② 一般名（全角）　※入力すると既存マスタとの一致を自動検索します",
     key="newdrug_name_full",
@@ -594,12 +600,11 @@ if not filtered_categories:
 shiji_bunrui_options = get_unique_values(master_data, "支持療法分類")
 
 with st.form(key="form_newdrug"):
-    brand_full = st.text_input(
-        "① 採用商品名（全角）　※規格・銘柄名は省略し、一般名と同一表記で可",
-        key="newdrug_brand_full",
-    )
     name_full = name_full_preview
-    st.caption(f"一般名（全角）：**{name_full or '（未入力）'}**　／　管理コード：**{new_code}**")
+    st.caption(
+        f"採用商品名：**{brand_full or '（未入力）'}**　／　"
+        f"一般名（全角）：**{name_full or '（未入力）'}**　／　管理コード：**{new_code}**"
+    )
 
     category = st.selectbox(
         f"④ 薬効分類　※「{default_kubun or '該当分類'}」の既存リストから選択。"
