@@ -186,25 +186,54 @@ def show_ae_check_ui(code, name, ae_data, ae_columns):
                 ae_codes = [row[0] for row in ae_all]
                 today = date.today().strftime("%Y/%m/%d")
 
+                from openpyxl.utils import get_column_letter as gcl
+                headers_ae = ae_all[0] if ae_all else []
+
                 if code in ae_codes:
                     row_idx = ae_codes.index(code) + 1
-                    from openpyxl.utils import get_column_letter as gcl
-                    start_col = gcl(3)
-                    end_col   = gcl(2 + len(ae_columns) + 2)
-                    update_vals = [
-                        ['○' if checked.get(c, False) else '' for c in ae_columns]
-                        + [source_text, today]
-                    ]
-                    ws_ae.update(
-                        range_name=f'{start_col}{row_idx}:{end_col}{row_idx}',
-                        values=update_vals
-                    )
+                    # 副作用列ごとに正確な列位置へ個別書き込み（列ズレ防止）
+                    for col_name in ae_columns:
+                        if col_name in headers_ae:
+                            col_idx = headers_ae.index(col_name) + 1
+                            ws_ae.update(
+                                range_name=f'{gcl(col_idx)}{row_idx}',
+                                values=[['○' if checked.get(col_name, False) else '']],
+                            )
+                    if "出典" in headers_ae:
+                        src_col = headers_ae.index("出典") + 1
+                        ws_ae.update(
+                            range_name=f'{gcl(src_col)}{row_idx}',
+                            values=[[source_text]],
+                        )
+                    if "登録日" in headers_ae:
+                        date_col = headers_ae.index("登録日") + 1
+                        ws_ae.update(
+                            range_name=f'{gcl(date_col)}{row_idx}',
+                            values=[[today]],
+                        )
                 else:
-                    new_row = (
-                        [code, name]
-                        + ['○' if checked.get(c, False) else '' for c in ae_columns]
-                        + [source_text, today]
-                    )
+                    # 新規行はヘッダー順に正確にマッピングして作成
+                    new_row = [''] * len(headers_ae) if headers_ae else []
+                    if headers_ae:
+                        if "管理コード" in headers_ae:
+                            new_row[headers_ae.index("管理コード")] = code
+                        if "一般名（全角）" in headers_ae:
+                            new_row[headers_ae.index("一般名（全角）")] = name
+                        for col_name in ae_columns:
+                            if col_name in headers_ae:
+                                new_row[headers_ae.index(col_name)] = (
+                                    '○' if checked.get(col_name, False) else ''
+                                )
+                        if "出典" in headers_ae:
+                            new_row[headers_ae.index("出典")] = source_text
+                        if "登録日" in headers_ae:
+                            new_row[headers_ae.index("登録日")] = today
+                    else:
+                        new_row = (
+                            [code, name]
+                            + ['○' if checked.get(c, False) else '' for c in ae_columns]
+                            + [source_text, today]
+                        )
                     ws_ae.append_row(new_row, value_input_option="USER_ENTERED")
 
                 st.success(f"✅ {name} の副作用マスタを登録しました！")
