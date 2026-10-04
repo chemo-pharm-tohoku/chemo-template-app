@@ -40,6 +40,47 @@ PREFIX_DEFAULT_KUBUN = {
     "IV": "輸液",
 }
 
+# 薬効分類の固定リスト（管理コード分類ごと）＋スケジュールシール用種類への自動マッピング
+CATEGORY_OPTIONS_BY_PREFIX = {
+    "AC": {
+        "細胞障害性抗がん薬": "細胞障害性抗がん薬",
+        "抗体医薬": "分子標的薬",
+        "ADC（抗体薬物複合体）": "分子標的薬",
+        "二重特異性抗体": "分子標的薬",
+        "免疫チェックポイント阻害薬": "免疫チェックポイント阻害薬",
+        "ホルモン剤": "分子標的薬",
+        "その他": "分子標的薬",
+    },
+    "ACO": {
+        "アルキル化薬": "細胞障害性抗がん薬",
+        "代謝拮抗剤": "細胞障害性抗がん薬",
+        "ホルモン剤": "分子標的薬",
+        "分子標的治療薬": "分子標的薬",
+        "免疫調整薬": "分子標的薬",
+        "抗腫瘍性植物成分製剤": "細胞障害性抗がん薬",
+        "その他": "分子標的薬",
+    },
+    "SJ": {
+        "制吐薬（NK1/5HT3/ステロイド）": "吐き気止め",
+        "G-CSF製剤": "造血因子",
+        "電解質補正": "補助薬",
+        "解毒薬": "補助薬",
+        "抗アレルギー": "吐き気止め",
+        "その他": "その他支持療法",
+    },
+    "SO": {
+        "制吐薬": "吐き気止め",
+        "ステロイド": "吐き気止め",
+        "抗アレルギー": "吐き気止め",
+        "胃薬（H2/PPI）": "その他支持療法",
+        "その他": "その他支持療法",
+    },
+    "IV": {
+        "輸液": "輸液",
+        "その他": "輸液",
+    },
+}
+
 TO_HALF_KANA_TABLE = {
     'ア':'ｱ','イ':'ｲ','ウ':'ｳ','エ':'ｴ','オ':'ｵ',
     'カ':'ｶ','キ':'ｷ','ク':'ｸ','ケ':'ｹ','コ':'ｺ',
@@ -594,20 +635,14 @@ if not fixed_code:
     default_kubun = PREFIX_DEFAULT_KUBUN.get(prefix, "")
     st.success(f"📌 発番予定の管理コード：**{new_code}**　（薬剤区分：自動的に「{default_kubun}」になります）")
 
-# 管理コードのプレフィックスに応じて薬効分類の選択肢を絞り込む
+# 管理コードのプレフィックスに応じた「固定・ざっくり」薬効分類の選択肢
 current_prefix = prefix_for_kubun if 'prefix_for_kubun' in dir() else ""
-filtered_categories = sorted(set(
-    str(m.get('薬効分類', '')).strip()
-    for m in master_data
-    if str(m.get('薬効分類', '')).strip()
-    and re.match(rf'^{re.escape(current_prefix)}-?\d+$', str(m.get('管理コード', '')).strip())
-)) if current_prefix else []
+category_map_for_prefix = CATEGORY_OPTIONS_BY_PREFIX.get(current_prefix, {})
+filtered_categories = list(category_map_for_prefix.keys())
 
 if not filtered_categories:
     filtered_categories = sorted(set(
-        str(m.get('薬効分類', '')).strip()
-        for m in master_data
-        if str(m.get('薬効分類', '')).strip()
+        v for m in CATEGORY_OPTIONS_BY_PREFIX.values() for v in m.keys()
     ))
 
 shiji_bunrui_options = get_unique_values(master_data, "支持療法分類")
@@ -620,14 +655,9 @@ with st.form(key="form_newdrug"):
     )
 
     category = st.selectbox(
-        f"④ 薬効分類　※「{default_kubun or '該当分類'}」の既存リストから選択。"
-        "無ければ下の「新しい薬効分類」に入力",
+        "④ 薬効分類　※下記からざっくり選択してください",
         options=["（選択してください）"] + filtered_categories,
         key="newdrug_category_select",
-    )
-    category_new = st.text_input(
-        "新しい薬効分類（上で該当が無い場合のみ入力）",
-        key="newdrug_category_new",
     )
 
     shiji_bunrui = st.selectbox(
@@ -652,7 +682,6 @@ with st.form(key="form_newdrug"):
         biko = st.text_input("備考", key="newdrug_biko")
         v_mg = st.text_input("1V当たりmg", key="newdrug_v_mg")
         kanja_setsumei = st.text_area("患者向け説明", key="newdrug_kanja_setsumei")
-        seal_type = st.text_input("スケジュールシール用種類", key="newdrug_seal_type")
         alias = st.text_input("別名・旧採用品名", key="newdrug_alias")
         tanshuku = st.text_input("短縮注記", key="newdrug_tanshuku")
 
@@ -666,10 +695,9 @@ with st.form(key="form_newdrug"):
     )
 
 if submitted:
-    final_category = category_new.strip() if category_new.strip() else (
-        category if category != "（選択してください）" else ""
-    )
+    final_category = category if category != "（選択してください）" else ""
     final_kubun = default_kubun
+    final_seal_type = category_map_for_prefix.get(final_category, "")
     if shiji_bunrui == "その他":
         final_shiji_bunrui = shiji_bunrui_other.strip()
     elif shiji_bunrui == "（なし）":
@@ -680,7 +708,7 @@ if submitted:
     if not name_full.strip():
         st.error("⚠️ 一般名を入力してください")
     elif not final_category:
-        st.error("⚠️ 薬効分類を選択または入力してください")
+        st.error("⚠️ 薬効分類を選択してください")
     else:
         try:
             gc = get_gspread_client()
@@ -708,7 +736,7 @@ if submitted:
                 biko.strip() if 'biko' in dir() else "",
                 v_mg.strip() if 'v_mg' in dir() else "",
                 kanja_setsumei.strip() if 'kanja_setsumei' in dir() else "",
-                seal_type.strip() if 'seal_type' in dir() else "",
+                final_seal_type,
                 alias.strip() if 'alias' in dir() else "",
                 tanshuku.strip() if 'tanshuku' in dir() else "",
             ]
