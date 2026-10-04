@@ -1344,6 +1344,13 @@ if st.session_state.get("registered"):
         st.switch_page("pages/3_テンプレート生成.py")
 
     if st.button(
+        "📄 説明書生成ページへ（患者さん説明用スケジュール表）",
+        use_container_width=True,
+        key="btn_next_schedule"
+    ):
+        st.switch_page("pages/6_説明書生成.py")
+
+    if st.button(
         "🔄 続けて別のレジメンを登録する",
         use_container_width=True,
         key="btn_next_new"
