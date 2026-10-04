@@ -320,6 +320,12 @@ ae_columns = get_ae_columns(ae_data)
 st.subheader("① 薬品マスタ未登録チェック")
 st.caption("薬剤情報シートに登場するが、薬品マスタに存在しない管理コードを警告します")
 
+if st.session_state.get("link_success_msg"):
+    st.success(st.session_state["link_success_msg"])
+    if st.button("✅ 閉じる", key="btn_close_link_success"):
+        st.session_state.pop("link_success_msg", None)
+        st.rerun()
+
 def normalize_for_match(text):
     table = str.maketrans('', '', ' 　')
     return str(text).translate(table).upper()
@@ -398,7 +404,7 @@ if pending_match:
                                         values=[[cand_code]],
                                     )
                                     updated_count += 1
-                            st.success(
+                            st.session_state["link_success_msg"] = (
                                 f"✅ 「{product_name}」の{updated_count}件を"
                                 f"{cand_code}に紐付けました！"
                             )
@@ -484,7 +490,7 @@ if pending_match:
                                         values=[[manual_cand_code]],
                                     )
                                     updated_count += 1
-                            st.success(
+                            st.session_state["link_success_msg"] = (
                                 f"✅ 「{product_name}」の{updated_count}件を"
                                 f"{manual_cand_code}に紐付けました！"
                             )
@@ -529,7 +535,16 @@ if missing:
         ):
             st.session_state["newdrug_fixed_code"] = code
             st.session_state["newdrug_brand_prefill"] = info['name']
+            st.session_state["load_hint_code"] = code
             st.rerun()
+        if st.session_state.get("load_hint_code") == code:
+            st.success(
+                f"⬇️ 「{code}」を「② 新規薬剤登録」フォームに読み込みました。"
+                "画面を下にスクロールして、薬効分類等を入力・登録してください。"
+            )
+            if st.button("✅ この案内を閉じる", key=f"btn_close_load_hint_{code}"):
+                st.session_state.pop("load_hint_code", None)
+                st.rerun()
 else:
     st.success("✅ 薬品マスタ未登録のコードはありません")
 
