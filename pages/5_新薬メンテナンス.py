@@ -289,8 +289,19 @@ def diagnose_pd_ae_alignment(pd_data, ae_data):
 
 
 # ===== Streamlit UI =====
+# ===== Streamlit UI =====
 st.title("🧪 新薬メンテナンス")
 st.caption("薬品マスタ・抗がん剤副作用マスタの新規登録・整備を行います")
+
+if st.session_state.get("scroll_hint_product"):
+    st.success(
+        f"⬇️ 「{st.session_state['scroll_hint_product']}」の採用商品名を"
+        "下の「② 新規薬剤登録」フォームに入力済みです。画面を下にスクロールしてください。"
+    )
+    if st.button("✅ この案内を閉じる", key="btn_close_scroll_hint"):
+        st.session_state.pop("scroll_hint_product", None)
+        st.rerun()
+
 st.divider()
 
 if st.button("🔄 データを最新化する", key="btn_refresh_maint"):
@@ -413,6 +424,7 @@ if pending_match:
                     use_container_width=True,
                 ):
                     st.session_state["newdrug_brand_prefill"] = product_name
+                    st.session_state["scroll_hint_product"] = product_name
                     st.rerun()
 
             if st.session_state.get(manual_mode_key):
