@@ -426,6 +426,7 @@ if pending_match:
                     use_container_width=True,
                 ):
                     st.session_state["newdrug_brand_prefill"] = product_name
+                    st.session_state["newdrug_brand_full"] = product_name
                     st.session_state["scroll_hint_product"] = product_name
                     st.rerun()
 
@@ -549,18 +550,6 @@ if fixed_code:
         st.session_state.pop("newdrug_fixed_code", None)
         st.session_state.pop("newdrug_brand_prefill", None)
         st.rerun()
-else:
-    prefix_label = st.selectbox(
-        "① 管理コードの分類を選択してください",
-        options=list(PREFIX_OPTIONS.keys()),
-        key="newdrug_prefix_label",
-    )
-    prefix = PREFIX_OPTIONS[prefix_label]
-    prefix_for_kubun = prefix
-    new_code = get_next_code(prefix, master_data)
-    default_kubun = PREFIX_DEFAULT_KUBUN.get(prefix, "")
-    st.success(f"📌 発番予定の管理コード：**{new_code}**　（薬剤区分：自動的に「{default_kubun}」になります）")
-
 name_full_preview = st.text_input(
     "② 一般名（全角）　※入力すると既存マスタとの一致を自動検索します",
     key="newdrug_name_full",
@@ -574,34 +563,46 @@ if name_full_preview.strip():
             cand_name = str(cand.get('採用商品名（全角）', '') or cand.get('一般名（全角）', '')).strip()
             st.caption(f"→ **{cand_code}**：{cand_name}（既存のこのコードを使用してください）")
 
-# 薬剤区分に応じて薬効分類の選択肢を絞り込む（近接表示）
-category_options_all = [
-    (str(m.get('薬効分類', '')).strip(), str(m.get('薬剤区分', '')).strip())
+if not fixed_code:
+    prefix_label = st.selectbox(
+        "③ 管理コードの分類を選択してください",
+        options=list(PREFIX_OPTIONS.keys()),
+        key="newdrug_prefix_label",
+    )
+    prefix = PREFIX_OPTIONS[prefix_label]
+    prefix_for_kubun = prefix
+    new_code = get_next_code(prefix, master_data)
+    default_kubun = PREFIX_DEFAULT_KUBUN.get(prefix, "")
+    st.success(f"📌 発番予定の管理コード：**{new_code}**　（薬剤区分：自動的に「{default_kubun}」になります）")
+
+# 管理コードのプレフィックスに応じて薬効分類の選択肢を絞り込む
+current_prefix = prefix_for_kubun if 'prefix_for_kubun' in dir() else ""
+filtered_categories = sorted(set(
+    str(m.get('薬効分類', '')).strip()
     for m in master_data
     if str(m.get('薬効分類', '')).strip()
-]
-if default_kubun:
-    filtered_categories = sorted(set(
-        c for c, k in category_options_all if k == default_kubun
-    ))
-else:
-    filtered_categories = sorted(set(c for c, k in category_options_all))
+    and re.match(rf'^{re.escape(current_prefix)}-?\d+$', str(m.get('管理コード', '')).strip())
+)) if current_prefix else []
+
 if not filtered_categories:
-    filtered_categories = sorted(set(c for c, k in category_options_all))
+    filtered_categories = sorted(set(
+        str(m.get('薬効分類', '')).strip()
+        for m in master_data
+        if str(m.get('薬効分類', '')).strip()
+    ))
 
 shiji_bunrui_options = get_unique_values(master_data, "支持療法分類")
 
 with st.form(key="form_newdrug"):
-    name_full = name_full_preview
-    st.caption(f"一般名（全角）：**{name_full or '（未入力）'}**")
     brand_full = st.text_input(
-        "採用商品名（全角）　※規格・銘柄名は省略し、一般名と同一表記で可",
-        value=st.session_state.get("newdrug_brand_prefill", ""),
+        "① 採用商品名（全角）　※規格・銘柄名は省略し、一般名と同一表記で可",
         key="newdrug_brand_full",
     )
+    name_full = name_full_preview
+    st.caption(f"一般名（全角）：**{name_full or '（未入力）'}**　／　管理コード：**{new_code}**")
 
     category = st.selectbox(
-        f"③ 薬効分類　※「{default_kubun or '該当分類'}」の既存リストから選択。"
+        f"④ 薬効分類　※「{default_kubun or '該当分類'}」の既存リストから選択。"
         "無ければ下の「新しい薬効分類」に入力",
         options=["（選択してください）"] + filtered_categories,
         key="newdrug_category_select",
