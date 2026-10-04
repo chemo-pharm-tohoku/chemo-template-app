@@ -1,0 +1,496 @@
+import streamlit as st
+import re
+import gspread
+from google.oauth2 import service_account
+from datetime import date
+
+st.set_page_config(
+    page_title="新薬メンテナンス",
+    page_icon="🧪",
+    layout="centered",
+    initial_sidebar_state="expanded",
+    menu_items={}
+)
+
+st.sidebar.title("メニュー")
+
+SPREADSHEET_URL = "https://docs.google.com/spreadsheets/d/1dLEUYSZlrIK1uHqEtEAfS1jSAPpXCIiAiAk_iaRuY-8/edit"
+
+MASTER_HEADERS = [
+    "管理コード", "一般名（全角）", "一般名（半角カナ）",
+    "採用商品名（全角）", "採用商品名（半角カナ）",
+    "薬効分類", "薬剤区分", "支持療法分類", "単位", "投与経路",
+    "標準希釈液", "フィルター", "遮光", "先発後発", "備考",
+    "1V当たりmg", "患者向け説明", "スケジュールシール用種類",
+    "別名・旧採用品名", "短縮注記",
+]
+
+PREFIX_OPTIONS = {
+    "AC（抗がん剤・注射）": "AC",
+    "ACO（抗がん剤・内服）": "ACO",
+    "SJ（支持療法・注射）": "SJ",
+    "SO（支持療法・内服）": "SO",
+    "IV（輸液）": "IV",
+}
+PREFIX_DEFAULT_KUBUN = {
+    "AC": "抗がん剤",
+    "ACO": "抗がん剤",
+    "SJ": "支持療法",
+    "SO": "支持療法",
+    "IV": "輸液",
+}
+
+TO_HALF_KANA_TABLE = {
+    'ア':'ｱ','イ':'ｲ','ウ':'ｳ','エ':'ｴ','オ':'ｵ',
+    'カ':'ｶ','キ':'ｷ','ク':'ｸ','ケ':'ｹ','コ':'ｺ',
+    'サ':'ｻ','シ':'ｼ','ス':'ｽ','セ':'ｾ','ソ':'ｿ',
+    'タ':'ﾀ','チ':'ﾁ','ツ':'ﾂ','テ':'ﾃ','ト':'ﾄ',
+    'ナ':'ﾅ','ニ':'ﾆ','ヌ':'ﾇ','ネ':'ﾈ','ノ':'ﾉ',
+    'ハ':'ﾊ','ヒ':'ﾋ','フ':'ﾌ','ヘ':'ﾍ','ホ':'ﾎ',
+    'マ':'ﾏ','ミ':'ﾐ','ム':'ﾑ','メ':'ﾒ','モ':'ﾓ',
+    'ヤ':'ﾔ','ユ':'ﾕ','ヨ':'ﾖ',
+    'ラ':'ﾗ','リ':'ﾘ','ル':'ﾙ','レ':'ﾚ','ロ':'ﾛ',
+    'ワ':'ﾜ','ヲ':'ｦ','ン':'ﾝ',
+    'ァ':'ｧ','ィ':'ｨ','ゥ':'ｩ','ェ':'ｪ','ォ':'ｫ',
+    'ッ':'ｯ','ャ':'ｬ','ュ':'ｭ','ョ':'ｮ',
+    'ガ':'ｶﾞ','ギ':'ｷﾞ','グ':'ｸﾞ','ゲ':'ｹﾞ','ゴ':'ｺﾞ',
+    'ザ':'ｻﾞ','ジ':'ｼﾞ','ズ':'ｽﾞ','ゼ':'ｾﾞ','ゾ':'ｿﾞ',
+    'ダ':'ﾀﾞ','ヂ':'ﾁﾞ','ヅ':'ﾂﾞ','デ':'ﾃﾞ','ド':'ﾄﾞ',
+    'バ':'ﾊﾞ','ビ':'ﾋﾞ','ブ':'ﾌﾞ','ベ':'ﾍﾞ','ボ':'ﾎﾞ',
+    'パ':'ﾊﾟ','ピ':'ﾋﾟ','プ':'ﾌﾟ','ペ':'ﾍﾟ','ポ':'ﾎﾟ',
+    'ー':'ｰ','ヴ':'ｳﾞ','・':'･',
+}
+
+def preview_half_kana(text):
+    """表示用プレビューのみ。実際の保存はASC()数式で行う。"""
+    return ''.join(TO_HALF_KANA_TABLE.get(c, c) for c in str(text))
+
+
+@st.cache_resource
+def get_gspread_client():
+    creds = service_account.Credentials.from_service_account_info(
+        st.secrets["gcp_service_account"],
+        scopes=[
+            "https://spreadsheets.google.com/feeds",
+            "https://www.googleapis.com/auth/drive",
+        ]
+    )
+    return gspread.authorize(creds)
+
+@st.cache_data(ttl=60)
+def fetch_sheet_realtime(sheet_name):
+    try:
+        gc = get_gspread_client()
+        ss = gc.open_by_url(SPREADSHEET_URL)
+        ws = ss.worksheet(sheet_name)
+        return ws.get_all_records()
+    except Exception as e:
+        st.error(f"シート「{sheet_name}」の取得に失敗: {e}")
+        return []
+
+@st.cache_data(ttl=60)
+def load_all_data():
+    drug_data   = fetch_sheet_realtime("薬剤情報")
+    master_data = fetch_sheet_realtime("薬品マスタ")
+    ae_data     = fetch_sheet_realtime("抗がん剤副作用マスタ")
+    pd_data     = fetch_sheet_realtime("Pd")
+    return drug_data, master_data, ae_data, pd_data
+
+
+def get_next_code(prefix, master_data):
+    """既存コードの表記（ハイフン有無）を検出し、次の連番コードを生成する"""
+    max_num = 0
+    use_hyphen = False
+    pattern = re.compile(rf'^{re.escape(prefix)}-?(\d+)$')
+    for m in master_data:
+        code = str(m.get('管理コード', '')).strip()
+        match = pattern.match(code)
+        if match:
+            num = int(match.group(1))
+            if num > max_num:
+                max_num = num
+            if '-' in code:
+                use_hyphen = True
+    next_num = max_num + 1
+    if use_hyphen:
+        return f"{prefix}-{next_num:03d}"
+    return f"{prefix}{next_num:03d}"
+
+
+def get_ae_columns(ae_data):
+    if not ae_data:
+        return []
+    excluded = {"管理コード", "一般名（全角）", "出典", "登録日"}
+    return [k for k in ae_data[0].keys() if k not in excluded]
+
+
+def get_unregistered_ae_drugs(master_data, ae_data):
+    """薬品マスタのAC系コードのうち、副作用マスタに登録日が無いものを抽出"""
+    ae_dict = {str(r.get('管理コード', '')).strip(): r for r in ae_data}
+    result = []
+    for m in master_data:
+        code = str(m.get('管理コード', '')).strip()
+        if not code.upper().startswith('AC'):
+            continue
+        ae_row = ae_dict.get(code, {})
+        reg_date = str(ae_row.get('登録日', '')).strip()
+        if not reg_date:
+            result.append({
+                'code': code,
+                'name': str(m.get('一般名（全角）', code)).strip(),
+            })
+    return result
+
+
+def show_ae_check_ui(code, name, ae_data, ae_columns):
+    """新規・既存を問わず、1薬剤分の副作用チェックUIを表示する"""
+    st.divider()
+    st.subheader(f"💊 抗がん剤副作用マスタ：{name}（{code}）")
+    st.info(
+        f"📄 [PMDAで添付文書を検索](https://www.pmda.go.jp/PmdaSearch/iyakuSearch/) し、"
+        f"「{name}」の添付文書・インタビューフォームの「重大な副作用」「その他の副作用」"
+        "「モニタリング項目」等を目視確認して、該当する副作用にチェックを入れてください。"
+    )
+
+    ae_dict = {str(r.get('管理コード', '')).strip(): r for r in ae_data}
+    current = ae_dict.get(code, {})
+
+    cols = st.columns(3)
+    checked = {}
+    for i, col_name in enumerate(ae_columns):
+        cb_key = f"maint_cb_{code}_{col_name}"
+        if cb_key not in st.session_state:
+            st.session_state[cb_key] = (str(current.get(col_name, '')).strip() == '○')
+        with cols[i % 3]:
+            checked[col_name] = st.checkbox(col_name, key=cb_key)
+
+    source_text = st.text_input(
+        "出典（例：添付文書(PMDA)、インタビューフォーム 等）",
+        value=str(current.get('出典', '')).strip() or "添付文書(PMDA)",
+        key=f"maint_src_{code}",
+    )
+
+    col_submit, col_skip = st.columns(2)
+    with col_submit:
+        if st.button(
+            f"✅ {name} の副作用を登録する",
+            type="primary",
+            use_container_width=True,
+            key=f"maint_ae_submit_{code}",
+        ):
+            try:
+                gc = get_gspread_client()
+                sh = gc.open_by_url(SPREADSHEET_URL)
+                ws_ae = sh.worksheet("抗がん剤副作用マスタ")
+                ae_all = ws_ae.get_all_values()
+                ae_codes = [row[0] for row in ae_all]
+                today = date.today().strftime("%Y/%m/%d")
+
+                if code in ae_codes:
+                    row_idx = ae_codes.index(code) + 1
+                    from openpyxl.utils import get_column_letter as gcl
+                    start_col = gcl(3)
+                    end_col   = gcl(2 + len(ae_columns) + 2)
+                    update_vals = [
+                        ['○' if checked.get(c, False) else '' for c in ae_columns]
+                        + [source_text, today]
+                    ]
+                    ws_ae.update(
+                        range_name=f'{start_col}{row_idx}:{end_col}{row_idx}',
+                        values=update_vals
+                    )
+                else:
+                    new_row = (
+                        [code, name]
+                        + ['○' if checked.get(c, False) else '' for c in ae_columns]
+                        + [source_text, today]
+                    )
+                    ws_ae.append_row(new_row, value_input_option="USER_ENTERED")
+
+                st.success(f"✅ {name} の副作用マスタを登録しました！")
+                for col_name in ae_columns:
+                    st.session_state.pop(f"maint_cb_{code}_{col_name}", None)
+                st.session_state.pop(f"maint_src_{code}", None)
+                st.session_state.pop("ae_pending_code", None)
+                st.session_state.pop("ae_pending_name", None)
+                st.session_state.pop("ae_select_target", None)
+                fetch_sheet_realtime.clear()
+                st.rerun()
+            except Exception as e:
+                st.error(f"❌ 登録エラー: {e}")
+
+    with col_skip:
+        if st.button(
+            "⏭️ あとで登録する（スキップ）",
+            use_container_width=True,
+            key=f"maint_ae_skip_{code}",
+        ):
+            st.session_state.pop("ae_pending_code", None)
+            st.session_state.pop("ae_pending_name", None)
+            st.session_state.pop("ae_select_target", None)
+            st.rerun()
+
+
+def diagnose_pd_ae_alignment(pd_data, ae_data):
+    if ae_data:
+        all_keys = list(ae_data[0].keys())
+    else:
+        all_keys = []
+    excluded = {"管理コード", "一般名（全角）", "出典", "登録日"}
+    ae_columns = [k for k in all_keys if k not in excluded]
+
+    result = {
+        "symptom_matched": [], "symptom_unmatched": [],
+        "drug_matched": [], "drug_unmatched": [], "no_type": [],
+    }
+    for row in pd_data:
+        cat = str(row.get("カテゴリ名", "")).strip()
+        cat_type = str(row.get("種別", "")).strip()
+        if not cat:
+            continue
+        if cat_type == "症状群":
+            (result["symptom_matched"] if cat in ae_columns
+             else result["symptom_unmatched"]).append(cat)
+        elif cat_type == "薬剤・薬効群":
+            (result["drug_matched"] if cat in ae_columns
+             else result["drug_unmatched"]).append(cat)
+        else:
+            result["no_type"].append(cat)
+    return result, ae_columns
+
+
+# ===== Streamlit UI =====
+st.title("🧪 新薬メンテナンス")
+st.caption("薬品マスタ・抗がん剤副作用マスタの新規登録・整備を行います")
+st.divider()
+
+if st.button("🔄 データを最新化する", key="btn_refresh_maint"):
+    st.cache_data.clear()
+    st.cache_resource.clear()
+    st.rerun()
+
+with st.spinner("データを読み込み中..."):
+    drug_data, master_data, ae_data, pd_data = load_all_data()
+
+ae_columns = get_ae_columns(ae_data)
+
+# ===== ①薬品マスタ未登録チェック =====
+st.subheader("① 薬品マスタ未登録チェック")
+st.caption("薬剤情報シートに登場するが、薬品マスタに存在しない管理コードを警告します")
+
+master_codes = {str(m.get('管理コード', '')).strip() for m in master_data}
+missing = {}
+for d in drug_data:
+    code = str(d.get('管理コード', '')).strip()
+    if not code or code in master_codes:
+        continue
+    info = missing.setdefault(code, {
+        'name': str(d.get('商品名', '')).strip(),
+        'protocols': set(),
+    })
+    info['protocols'].add(str(d.get('プロトコールNo', '')).strip())
+
+if missing:
+    st.warning(f"⚠️ 薬品マスタに未登録のコードが {len(missing)} 件あります")
+    for code, info in missing.items():
+        protocols_str = "、".join(sorted(info['protocols']))
+        st.markdown(f"**{code}**：{info['name']}（使用レジメン：{protocols_str}）")
+        if st.button(
+            f"➕ {code} を登録フォームに読み込む",
+            key=f"btn_load_missing_{code}",
+        ):
+            st.session_state["newdrug_fixed_code"] = code
+            st.session_state["newdrug_brand_prefill"] = info['name']
+            st.rerun()
+else:
+    st.success("✅ 薬品マスタ未登録のコードはありません")
+
+st.divider()
+
+# ===== ②新規薬剤登録フォーム =====
+st.subheader("② 新規薬剤登録")
+
+fixed_code = st.session_state.get("newdrug_fixed_code")
+
+if fixed_code:
+    st.info(f"🔧 薬剤情報シートに既存の管理コード「{fixed_code}」を登録します")
+    new_code = fixed_code
+    guessed_prefix = re.match(r'^[A-Z]+', fixed_code)
+    default_kubun = PREFIX_DEFAULT_KUBUN.get(
+        guessed_prefix.group() if guessed_prefix else "", ""
+    )
+    if st.button("🔙 固定コード指定を解除する", key="btn_unfix_code"):
+        st.session_state.pop("newdrug_fixed_code", None)
+        st.session_state.pop("newdrug_brand_prefill", None)
+        st.rerun()
+else:
+    prefix_label = st.selectbox(
+        "管理コードの分類を選択してください",
+        options=list(PREFIX_OPTIONS.keys()),
+        key="newdrug_prefix_label",
+    )
+    prefix = PREFIX_OPTIONS[prefix_label]
+    new_code = get_next_code(prefix, master_data)
+    default_kubun = PREFIX_DEFAULT_KUBUN.get(prefix, "")
+    st.success(f"📌 発番予定の管理コード：**{new_code}**")
+
+with st.form(key="form_newdrug"):
+    name_full = st.text_input(
+        "一般名（全角）",
+        key="newdrug_name_full",
+    )
+    brand_full = st.text_input(
+        "採用商品名（全角）　※規格・銘柄名は省略し、一般名と同一表記で可",
+        value=st.session_state.get("newdrug_brand_prefill", ""),
+        key="newdrug_brand_full",
+    )
+    category = st.text_input("薬効分類", key="newdrug_category")
+    kubun = st.text_input("薬剤区分", value=default_kubun, key="newdrug_kubun")
+    shiji_bunrui = st.text_input("支持療法分類（任意）", key="newdrug_shiji_bunrui")
+
+    with st.expander("詳細項目（任意・必要な場合のみ入力）"):
+        tani = st.text_input("単位", key="newdrug_tani")
+        toyokeiro = st.text_input("投与経路", key="newdrug_toyokeiro")
+        kibo_eki = st.text_input("標準希釈液", key="newdrug_kibo_eki")
+        filter_val = st.text_input("フィルター", key="newdrug_filter")
+        shako = st.text_input("遮光", key="newdrug_shako")
+        senpatsu = st.text_input("先発後発", key="newdrug_senpatsu")
+        biko = st.text_input("備考", key="newdrug_biko")
+        v_mg = st.text_input("1V当たりmg", key="newdrug_v_mg")
+        kanja_setsumei = st.text_area("患者向け説明", key="newdrug_kanja_setsumei")
+        seal_type = st.text_input("スケジュールシール用種類", key="newdrug_seal_type")
+        alias = st.text_input("別名・旧採用品名", key="newdrug_alias")
+        tanshuku = st.text_input("短縮注記", key="newdrug_tanshuku")
+
+    if name_full:
+        st.caption(f"💡 半角カナ変換プレビュー（参考・実際はASC関数で自動計算）：{preview_half_kana(name_full)}")
+
+    submitted = st.form_submit_button(
+        "✅ 薬品マスタに登録する",
+        type="primary",
+        use_container_width=True,
+    )
+
+if submitted:
+    if not name_full.strip():
+        st.error("⚠️ 一般名を入力してください")
+    else:
+        try:
+            gc = get_gspread_client()
+            sh = gc.open_by_url(SPREADSHEET_URL)
+            ws_master = sh.worksheet("薬品マスタ")
+            existing_values = ws_master.get_all_values()
+            new_row_number = len(existing_values) + 1
+
+            row = [
+                new_code,
+                name_full.strip(),
+                f"=ASC(B{new_row_number})",
+                brand_full.strip() or name_full.strip(),
+                f"=ASC(D{new_row_number})",
+                category.strip(),
+                kubun.strip(),
+                shiji_bunrui.strip() if 'shiji_bunrui' in dir() else "",
+                tani.strip() if 'tani' in dir() else "",
+                toyokeiro.strip() if 'toyokeiro' in dir() else "",
+                kibo_eki.strip() if 'kibo_eki' in dir() else "",
+                filter_val.strip() if 'filter_val' in dir() else "",
+                shako.strip() if 'shako' in dir() else "",
+                senpatsu.strip() if 'senpatsu' in dir() else "",
+                biko.strip() if 'biko' in dir() else "",
+                v_mg.strip() if 'v_mg' in dir() else "",
+                kanja_setsumei.strip() if 'kanja_setsumei' in dir() else "",
+                seal_type.strip() if 'seal_type' in dir() else "",
+                alias.strip() if 'alias' in dir() else "",
+                tanshuku.strip() if 'tanshuku' in dir() else "",
+            ]
+            ws_master.append_row(row, value_input_option="USER_ENTERED")
+
+            st.success(f"✅ {new_code}（{name_full}）を薬品マスタに登録しました！")
+            st.session_state.pop("newdrug_fixed_code", None)
+            st.session_state.pop("newdrug_brand_prefill", None)
+
+            if new_code.upper().startswith("AC"):
+                st.session_state["ae_pending_code"] = new_code
+                st.session_state["ae_pending_name"] = name_full.strip()
+
+            fetch_sheet_realtime.clear()
+            st.rerun()
+        except Exception as e:
+            st.error(f"❌ 登録エラー: {e}")
+
+st.divider()
+
+# ===== ③抗がん剤副作用マスタ整備 =====
+st.subheader("③ 抗がん剤副作用マスタ整備")
+
+if st.session_state.get("ae_pending_code"):
+    show_ae_check_ui(
+        st.session_state["ae_pending_code"],
+        st.session_state["ae_pending_name"],
+        ae_data, ae_columns,
+    )
+else:
+    unregistered = get_unregistered_ae_drugs(master_data, ae_data)
+    if unregistered:
+        st.warning(f"⚠️ 副作用マスタ未登録（登録日が空）の抗がん剤が {len(unregistered)} 件あります")
+        options = {f"{u['name']}（{u['code']}）": u for u in unregistered}
+        selected_label = st.selectbox(
+            "整備する薬剤を選択してください",
+            options=["選択してください"] + list(options.keys()),
+            key="ae_select_target",
+        )
+        if selected_label != "選択してください":
+            target = options[selected_label]
+            show_ae_check_ui(target['code'], target['name'], ae_data, ae_columns)
+    else:
+        st.success("✅ 抗がん剤副作用マスタ未登録の薬剤はありません")
+
+st.divider()
+
+# ===== ④Pd整合性チェック =====
+st.subheader("④ Pd整合性チェック")
+st.caption("Pdシートの「種別」列に基づき、抗がん剤副作用マスタとの整合性を確認します")
+
+if st.button("🔍 整合性をチェックする", key="btn_check_pd_alignment_maint"):
+    diag_result, _ = diagnose_pd_ae_alignment(pd_data, ae_data)
+    st.session_state["pd_diagnosis_maint"] = diag_result
+    st.rerun()
+
+if "pd_diagnosis_maint" in st.session_state:
+    diag = st.session_state["pd_diagnosis_maint"]
+
+    st.markdown("**✅ 症状群カテゴリ（マスタと一致）**")
+    st.write(diag["symptom_matched"] if diag["symptom_matched"] else "（なし）")
+
+    st.markdown("**✅ 薬剤・薬効群カテゴリ（マスタと一致）**")
+    st.write(diag["drug_matched"] if diag["drug_matched"] else "（なし）")
+
+    st.markdown("**⚠️ 未対応：症状群カテゴリ（手動登録が必要）**")
+    if diag["symptom_unmatched"]:
+        for cat in diag["symptom_unmatched"]:
+            st.warning(
+                f"「{cat}」列が抗がん剤副作用マスタにありません。"
+                f"[スプレッドシートを開く]({SPREADSHEET_URL})で"
+                f"「{cat}」列を末尾に追加し、各薬剤を確認して該当するものに○をつけ、"
+                f"出典・登録日を記入してください。"
+            )
+    else:
+        st.success("未対応の症状群カテゴリはありません")
+
+    st.markdown("**⚠️ 未対応：薬剤・薬効群カテゴリ（手動登録が必要）**")
+    if diag["drug_unmatched"]:
+        for cat in diag["drug_unmatched"]:
+            st.warning(
+                f"「{cat}」列が抗がん剤副作用マスタにありません。"
+                f"[スプレッドシートを開く]({SPREADSHEET_URL})で"
+                f"「{cat}」列を末尾に追加し、各薬剤を確認して該当するものに○をつけ、"
+                f"出典・登録日を記入してください。"
+            )
+    else:
+        st.success("未対応の薬剤・薬効群カテゴリはありません")
+
+    if diag["no_type"]:
+        st.markdown("**❓ 種別未設定のカテゴリ**")
+        st.write(diag["no_type"])
+        st.caption("Pdシートの「種別」列に「症状群」または「薬剤・薬効群」を設定してください。")
