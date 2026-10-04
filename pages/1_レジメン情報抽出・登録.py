@@ -56,6 +56,17 @@ def load_master_data():
     notes_data  = sh.worksheet("注意事項").get_all_records()
     return master_data, notes_data
 
+@st.cache_data(ttl=60)
+def fetch_sheet_realtime_ae(sheet_name):
+    try:
+        gc = get_gspread_client()
+        ss = gc.open_by_url(st.secrets["spreadsheet"]["url"])
+        ws = ss.worksheet(sheet_name)
+        return ws.get_all_records()
+    except Exception as e:
+        st.error(f"シート「{sheet_name}」の取得に失敗: {e}")
+        return []
+
 # ===== ヘルパー関数 =====
 def get_val(d, *keys, default=""):
     for key in keys:
@@ -264,6 +275,112 @@ def add_alias_to_master(management_code, alias_text):
         load_master_data.clear()
         return True, f"「{alias_text}」を {management_code} の別名に追加しました"
     return True, "既に登録済みでした"
+
+def get_ae_columns_for_check(ae_data):
+    if not ae_data:
+        return []
+    excluded = {"管理コード", "一般名（全角）", "出典", "登録日"}
+    return [k for k in ae_data[0].keys() if k not in excluded]
+
+
+def show_ae_check_ui_step4(code, name, ae_data, ae_columns):
+    """抗がん剤副作用マスタの登録・更新UI（新規／既存どちらにも対応）"""
+    master_data_ae, _ = load_master_data()
+    brand_name = next(
+        (m.get('採用商品名（全角）', name)
+         for m in master_data_ae
+         if str(m.get('管理コード', '')).strip() == code),
+        name
+    )
+    st.info(
+        f"📄 [PMDAで「{brand_name}」の添付文書を検索]"
+        "(https://www.pmda.go.jp/PmdaSearch/iyakuSearch/) し、"
+        "「重大な副作用」「その他の副作用」「モニタリング項目」等を確認して、"
+        "該当する副作用にチェックを入れてください。"
+    )
+
+    ae_dict = {str(r.get('管理コード', '')).strip(): r for r in ae_data}
+    current = ae_dict.get(code, {})
+
+    cols = st.columns(3)
+    checked = {}
+    for i, col_name in enumerate(ae_columns):
+        cb_key = f"step4_ae_cb_{code}_{col_name}"
+        if cb_key not in st.session_state:
+            st.session_state[cb_key] = (str(current.get(col_name, '')).strip() == '○')
+        with cols[i % 3]:
+            checked[col_name] = st.checkbox(col_name, key=cb_key)
+
+    source_text = st.text_input(
+        "出典（例：添付文書(PMDA)、インタビューフォーム 等）",
+        value=str(current.get('出典', '')).strip() or "添付文書(PMDA)",
+        key=f"step4_ae_src_{code}",
+    )
+
+    if st.button(
+        f"✅ {name} の副作用を登録・更新する",
+        type="primary",
+        use_container_width=True,
+        key=f"step4_ae_submit_{code}",
+    ):
+        try:
+            gc = get_gspread_client()
+            sh = gc.open_by_url(st.secrets["spreadsheet"]["url"])
+            ws_ae = sh.worksheet("抗がん剤副作用マスタ")
+            ae_all = ws_ae.get_all_values()
+            ae_codes = [row[0] for row in ae_all]
+            today = date.today().strftime("%Y/%m/%d")
+            headers_ae = ae_all[0] if ae_all else []
+            from openpyxl.utils import get_column_letter as gcl
+
+            if code in ae_codes:
+                row_idx = ae_codes.index(code) + 1
+                for col_name in ae_columns:
+                    if col_name in headers_ae:
+                        col_idx = headers_ae.index(col_name) + 1
+                        ws_ae.update(
+                            range_name=f'{gcl(col_idx)}{row_idx}',
+                            values=[['○' if checked.get(col_name, False) else '']],
+                        )
+                if "出典" in headers_ae:
+                    src_col = headers_ae.index("出典") + 1
+                    ws_ae.update(range_name=f'{gcl(src_col)}{row_idx}', values=[[source_text]])
+                if "登録日" in headers_ae:
+                    date_col = headers_ae.index("登録日") + 1
+                    ws_ae.update(range_name=f'{gcl(date_col)}{row_idx}', values=[[today]])
+            else:
+                new_row = [''] * len(headers_ae) if headers_ae else []
+                if headers_ae:
+                    if "管理コード" in headers_ae:
+                        new_row[headers_ae.index("管理コード")] = code
+                    if "一般名（全角）" in headers_ae:
+                        new_row[headers_ae.index("一般名（全角）")] = name
+                    for col_name in ae_columns:
+                        if col_name in headers_ae:
+                            new_row[headers_ae.index(col_name)] = (
+                                '○' if checked.get(col_name, False) else ''
+                            )
+                    if "出典" in headers_ae:
+                        new_row[headers_ae.index("出典")] = source_text
+                    if "登録日" in headers_ae:
+                        new_row[headers_ae.index("登録日")] = today
+                else:
+                    new_row = (
+                        [code, name]
+                        + ['○' if checked.get(c, False) else '' for c in ae_columns]
+                        + [source_text, today]
+                    )
+                ws_ae.append_row(new_row, value_input_option="USER_ENTERED")
+
+            st.success(f"✅ {name} の副作用マスタを登録・更新しました！")
+            for col_name in ae_columns:
+                st.session_state.pop(f"step4_ae_cb_{code}_{col_name}", None)
+            st.session_state.pop(f"step4_ae_src_{code}", None)
+            fetch_sheet_realtime_ae.clear()
+            st.rerun()
+        except Exception as e:
+            st.error(f"❌ 登録エラー: {e}")
+
 
 def shorten_regimen_name(regimen_name):
     name = regimen_name
@@ -1128,6 +1245,43 @@ elif st.session_state.get("registered"):
         "「要確認」となっている項目があれば、スプレッドシートの「薬剤情報」シートを開いて"
         "直接修正してください（管理コード・投与量・投与時間等）。"
     )
+
+    # ===== 抗がん剤副作用マスタ 登録状況（このレジメンの抗がん剤） =====
+    st.divider()
+    st.subheader("📊 抗がん剤副作用マスタ 登録状況")
+
+    _protocol_no_check = st.session_state.get('registered_protocol', '')
+    _sh_check = get_spreadsheet()
+    _drug_data_check = _sh_check.worksheet("薬剤情報").get_all_records()
+    _ae_data_check = fetch_sheet_realtime_ae("抗がん剤副作用マスタ")
+    _master_data_check, _ = load_master_data()
+    _ae_columns_check = get_ae_columns_for_check(_ae_data_check)
+
+    _cancer_codes_check = list(dict.fromkeys([
+        str(d.get('管理コード', '')).strip()
+        for d in _drug_data_check
+        if str(d.get('プロトコールNo', '')).strip() == _protocol_no_check
+        and str(d.get('管理コード', '')).strip().upper().startswith('AC')
+    ]))
+
+    _ae_dict_check = {str(r.get('管理コード', '')).strip(): r for r in _ae_data_check}
+
+    for _code in _cancer_codes_check:
+        _name = next(
+            (m.get('一般名（全角）', _code)
+             for m in _master_data_check
+             if str(m.get('管理コード', '')).strip() == _code),
+            _code
+        )
+        _ae_row = _ae_dict_check.get(_code, {})
+        _reg_date = str(_ae_row.get('登録日', '')).strip()
+
+        if _reg_date:
+            with st.expander(f"✅ {_name}：{_reg_date} 登録済み（クリックで修正・上書き）"):
+                show_ae_check_ui_step4(_code, _name, _ae_data_check, _ae_columns_check)
+        else:
+            with st.expander(f"⚠️ {_name}：未登録です（クリックで登録）", expanded=True):
+                show_ae_check_ui_step4(_code, _name, _ae_data_check, _ae_columns_check)
 else:
     st.info("👆 STEP3で内容を確認してから登録してください")
 
