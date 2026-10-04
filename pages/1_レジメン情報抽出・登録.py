@@ -886,6 +886,13 @@ def create_pptx(protocol_no, basic_data, drug_data,
 # ===== STEP1 =====
 st.subheader("STEP 1　確認票をコピー＆ペースト")
 
+st.markdown(
+    "<p style='color:red; font-weight:bold; font-size:16px;'>"
+    "「化学療法確認票マスタ印刷ツール」は、診療支援端末Eドライブ直下に配置されています"
+    "</p>",
+    unsafe_allow_html=True,
+)
+
 with st.expander("📖 確認票の出し方（クリックで開く）", expanded=False):
     import os
     _guide_img_path = "化学療法確認票取込方法.jpg"
