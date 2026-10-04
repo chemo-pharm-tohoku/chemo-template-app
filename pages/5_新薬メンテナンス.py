@@ -379,15 +379,13 @@ if submitted:
             gc = get_gspread_client()
             sh = gc.open_by_url(SPREADSHEET_URL)
             ws_master = sh.worksheet("薬品マスタ")
-            existing_values = ws_master.get_all_values()
-            new_row_number = len(existing_values) + 1
 
             row = [
                 new_code,
                 name_full.strip(),
-                f"=ASC(B{new_row_number})",
+                "",
                 brand_full.strip() or name_full.strip(),
-                f"=ASC(D{new_row_number})",
+                "",
                 category.strip(),
                 kubun.strip(),
                 shiji_bunrui.strip() if 'shiji_bunrui' in dir() else "",
@@ -405,6 +403,20 @@ if submitted:
                 tanshuku.strip() if 'tanshuku' in dir() else "",
             ]
             ws_master.append_row(row, value_input_option="USER_ENTERED")
+
+            # 実際に追加された行番号を取得してから数式を書き込む（REF対策）
+            all_codes = ws_master.col_values(1)
+            actual_row = len(all_codes)  # append_row直後の最終行＝今追加した行
+            ws_master.update(
+                range_name=f'C{actual_row}',
+                values=[[f"=ASC(B{actual_row})"]],
+                value_input_option="USER_ENTERED",
+            )
+            ws_master.update(
+                range_name=f'E{actual_row}',
+                values=[[f"=ASC(D{actual_row})"]],
+                value_input_option="USER_ENTERED",
+            )
 
             st.success(f"✅ {new_code}（{name_full}）を薬品マスタに登録しました！")
             st.session_state.pop("newdrug_fixed_code", None)
