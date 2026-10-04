@@ -25,7 +25,7 @@ st.subheader("🆕 新規レジメン登録")
 with st.container(border=True):
     st.markdown("#### 📋 レジメン情報抽出・登録")
     st.write(
-        "レジメンPDFをアップロードすると "
+        "確認票のテキストを貼り付けると "
         "AIが自動解析 → スプレッドシート登録 "
         "→ スケジュールシール生成まで一気通貫"
     )
@@ -49,7 +49,7 @@ with col_l:
         st.markdown("#### 📊 テンプレート Excel 生成")
         st.write(
             "登録済みレジメンから Excel、またはExcelに貼り付けるテキスト を生成。\n"
-            "Pd（説明した内容）カテゴリ確認・副作用登録もこちら。"
+            "副作用登録・Pd整合性チェックは「新薬メンテナンス」ページで行います。"
         )
         if st.button(
             "📊 Excel 生成へ",
@@ -75,11 +75,43 @@ with col_r:
         ):
             st.switch_page("pages/4_O欄Pd欄生成.py")
 
-    st.link_button(
-        "📋 登録済みレジメンを確認する（マスタスプレッドシート）",
-        "https://docs.google.com/spreadsheets/d/1dLEUYSZlrIK1uHqEtEAfS1jSAPpXCIiAiAk_iaRuY-8/edit?gid=0#gid=0",
-        use_container_width=True
-    )
+col_l2, col_r2 = st.columns(2)
+
+with col_l2:
+    with st.container(border=True):
+        st.markdown("#### 📄 説明書生成")
+        st.write(
+            "患者さん説明用のスケジュール表を画面に表示。\n"
+            "ダウンロード不要、コピーしてWordに貼り付け編集・印刷できます。"
+        )
+        if st.button(
+            "📄 説明書生成へ",
+            type="primary",
+            use_container_width=True,
+            key="btn_top_6"
+        ):
+            st.switch_page("pages/6_説明書生成.py")
+
+with col_r2:
+    with st.container(border=True):
+        st.markdown("#### 🧪 新薬メンテナンス")
+        st.write(
+            "新薬の薬品マスタ登録・抗がん剤副作用マスタ整備・"
+            "Pd整合性チェックはこちらから。"
+        )
+        if st.button(
+            "🧪 新薬メンテナンスへ",
+            type="primary",
+            use_container_width=True,
+            key="btn_top_5"
+        ):
+            st.switch_page("pages/5_新薬メンテナンス.py")
+
+st.link_button(
+    "📋 登録済みレジメンを確認する（マスタスプレッドシート）",
+    "https://docs.google.com/spreadsheets/d/1dLEUYSZlrIK1uHqEtEAfS1jSAPpXCIiAiAk_iaRuY-8/edit?gid=0#gid=0",
+    use_container_width=True
+)
 
 st.divider()
 
@@ -101,10 +133,7 @@ with st.container(border=True):
         )
     with col2:
         st.caption(
-            "Pd カテゴリは、Pd欄に記載する患者さんに説明した文章を設定します。"
-            "（PdカテゴリIDは、"
-            "[Pd シート](https://docs.google.com/spreadsheets/d/1dLEUYSZlrIK1uHqEtEAfS1jSAPpXCIiAiAk_iaRuY-8/edit?gid=224247887#gid=224247887)"
-            " 参照）"
+            "プロトコールNo・レジメン名・1コース日数・備考等を管理します。"
         )
 
     st.markdown("")
@@ -119,7 +148,7 @@ with st.container(border=True):
         )
     with col2:
         st.caption(
-            "①O欄_抗がん剤　①O欄_支持療法　②シール　③図　④説明書 の項目に "
+            "①O欄_抗がん剤　①O欄_支持療法　①O欄_内服抗がん薬　②シール　③図　④説明書 の項目に "
             "○ をつけるとテンプレートで表現されます。"
         )
 
@@ -135,7 +164,7 @@ with st.container(border=True):
         )
     with col2:
         st.caption(
-            "患者さんに説明した副作用内容を編集できます。"
+            "患者さんに指導した副作用内容を編集できます。"
         )
 
     st.markdown("")
