@@ -304,16 +304,6 @@ def diagnose_pd_ae_alignment(pd_data, ae_data):
 # ===== Streamlit UI =====
 st.title("🧪 新薬メンテナンス")
 st.caption("薬品マスタ・抗がん剤副作用マスタの新規登録・整備を行います")
-
-if st.session_state.get("scroll_hint_product"):
-    st.success(
-        f"⬇️ 「{st.session_state['scroll_hint_product']}」の採用商品名を"
-        "下の「② 新規薬剤登録」フォームに入力済みです。画面を下にスクロールしてください。"
-    )
-    if st.button("✅ この案内を閉じる", key="btn_close_scroll_hint"):
-        st.session_state.pop("scroll_hint_product", None)
-        st.rerun()
-
 st.divider()
 
 if st.button("🔄 データを最新化する", key="btn_refresh_maint"):
@@ -439,6 +429,18 @@ if pending_match:
                     st.session_state["scroll_hint_product"] = product_name
                     st.rerun()
 
+            if st.session_state.get("scroll_hint_product") == product_name:
+                st.success(
+                    f"⬇️ 採用商品名「{product_name}」を"
+                    "下の「② 新規薬剤登録」フォームに入力済みです。画面を下にスクロールしてください。"
+                )
+                if st.button(
+                    "✅ この案内を閉じる",
+                    key=f"btn_close_scroll_hint_{product_name}",
+                ):
+                    st.session_state.pop("scroll_hint_product", None)
+                    st.rerun()
+
             if st.session_state.get(manual_mode_key):
                 all_options = {
                     f"{str(m.get('管理コード','')).strip()}："
@@ -541,26 +543,26 @@ if fixed_code:
     st.info(f"🔧 薬剤情報シートに既存の管理コード「{fixed_code}」を登録します")
     new_code = fixed_code
     guessed_prefix = re.match(r'^[A-Z]+', fixed_code)
-    default_kubun = PREFIX_DEFAULT_KUBUN.get(
-        guessed_prefix.group() if guessed_prefix else "", ""
-    )
+    prefix_for_kubun = guessed_prefix.group() if guessed_prefix else ""
+    default_kubun = PREFIX_DEFAULT_KUBUN.get(prefix_for_kubun, "")
     if st.button("🔙 固定コード指定を解除する", key="btn_unfix_code"):
         st.session_state.pop("newdrug_fixed_code", None)
         st.session_state.pop("newdrug_brand_prefill", None)
         st.rerun()
 else:
     prefix_label = st.selectbox(
-        "管理コードの分類を選択してください",
+        "① 管理コードの分類を選択してください",
         options=list(PREFIX_OPTIONS.keys()),
         key="newdrug_prefix_label",
     )
     prefix = PREFIX_OPTIONS[prefix_label]
+    prefix_for_kubun = prefix
     new_code = get_next_code(prefix, master_data)
     default_kubun = PREFIX_DEFAULT_KUBUN.get(prefix, "")
-    st.success(f"📌 発番予定の管理コード：**{new_code}**")
+    st.success(f"📌 発番予定の管理コード：**{new_code}**　（薬剤区分：自動的に「{default_kubun}」になります）")
 
 name_full_preview = st.text_input(
-    "一般名（全角）　※入力すると既存マスタとの一致を自動検索します",
+    "② 一般名（全角）　※入力すると既存マスタとの一致を自動検索します",
     key="newdrug_name_full",
 )
 if name_full_preview.strip():
@@ -572,8 +574,21 @@ if name_full_preview.strip():
             cand_name = str(cand.get('採用商品名（全角）', '') or cand.get('一般名（全角）', '')).strip()
             st.caption(f"→ **{cand_code}**：{cand_name}（既存のこのコードを使用してください）")
 
-category_options = get_unique_values(master_data, "薬効分類")
-kubun_options = get_unique_values(master_data, "薬剤区分")
+# 薬剤区分に応じて薬効分類の選択肢を絞り込む（近接表示）
+category_options_all = [
+    (str(m.get('薬効分類', '')).strip(), str(m.get('薬剤区分', '')).strip())
+    for m in master_data
+    if str(m.get('薬効分類', '')).strip()
+]
+if default_kubun:
+    filtered_categories = sorted(set(
+        c for c, k in category_options_all if k == default_kubun
+    ))
+else:
+    filtered_categories = sorted(set(c for c, k in category_options_all))
+if not filtered_categories:
+    filtered_categories = sorted(set(c for c, k in category_options_all))
+
 shiji_bunrui_options = get_unique_values(master_data, "支持療法分類")
 
 with st.form(key="form_newdrug"):
@@ -586,28 +601,14 @@ with st.form(key="form_newdrug"):
     )
 
     category = st.selectbox(
-        "薬効分類　※既存リストから選択、無ければ下の「新しい薬効分類」に入力",
-        options=["（選択してください）"] + category_options,
+        f"③ 薬効分類　※「{default_kubun or '該当分類'}」の既存リストから選択。"
+        "無ければ下の「新しい薬効分類」に入力",
+        options=["（選択してください）"] + filtered_categories,
         key="newdrug_category_select",
     )
     category_new = st.text_input(
         "新しい薬効分類（上で該当が無い場合のみ入力）",
         key="newdrug_category_new",
-    )
-
-    kubun_default_idx = (
-        kubun_options.index(default_kubun) + 1
-        if default_kubun in kubun_options else 0
-    )
-    kubun = st.selectbox(
-        "薬剤区分　※既存リストから選択、無ければ下の「新しい薬剤区分」に入力",
-        options=["（選択してください）"] + kubun_options,
-        index=kubun_default_idx,
-        key="newdrug_kubun_select",
-    )
-    kubun_new = st.text_input(
-        "新しい薬剤区分（上で該当が無い場合のみ入力）",
-        key="newdrug_kubun_new",
     )
 
     shiji_bunrui = st.selectbox(
@@ -649,9 +650,7 @@ if submitted:
     final_category = category_new.strip() if category_new.strip() else (
         category if category != "（選択してください）" else ""
     )
-    final_kubun = kubun_new.strip() if kubun_new.strip() else (
-        kubun if kubun != "（選択してください）" else ""
-    )
+    final_kubun = default_kubun
     if shiji_bunrui == "その他":
         final_shiji_bunrui = shiji_bunrui_other.strip()
     elif shiji_bunrui == "（なし）":
@@ -663,8 +662,6 @@ if submitted:
         st.error("⚠️ 一般名を入力してください")
     elif not final_category:
         st.error("⚠️ 薬効分類を選択または入力してください")
-    elif not final_kubun:
-        st.error("⚠️ 薬剤区分を選択または入力してください")
     else:
         try:
             gc = get_gspread_client()
