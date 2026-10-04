@@ -488,10 +488,11 @@ else:
         st.success("✅ 抗がん剤副作用マスタ未登録の薬剤はありません")
 
 st.divider()
+st.divider()
 
-# ===== ④Pd整合性チェック =====
-st.subheader("④ Pd整合性チェック")
-st.caption("Pdシートの「種別」列に基づき、抗がん剤副作用マスタとの整合性を確認します")
+# ===== おまけ：Pd整合性チェック =====
+st.subheader("🔧 おまけ：Pd整合性チェック")
+st.caption("Pdシートの「種別」列に基づき、抗がん剤副作用マスタとの整合性を確認します（独立したメンテナンス機能です）")
 
 if st.button("🔍 整合性をチェックする", key="btn_check_pd_alignment_maint"):
     diag_result, _ = diagnose_pd_ae_alignment(pd_data, ae_data)
