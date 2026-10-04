@@ -2165,54 +2165,7 @@ if not basic_data:
     st.stop()
 
 
-# ===== Pd整合性チェック機能 =====
-with st.expander("🔍 Pd整合性チェック（メンテナンス機能）", expanded=False):
-    st.caption("Pdシートの「種別」列に基づき、抗がん剤副作用マスタとの整合性を確認します")
-
-    if st.button("🔍 整合性をチェックする", key="btn_check_pd_alignment"):
-        diag_result, ae_cols = diagnose_pd_ae_alignment(pd_data, ae_data, master_data)
-        st.session_state["pd_diagnosis"] = diag_result
-        st.rerun()
-
-    if "pd_diagnosis" in st.session_state:
-        diag = st.session_state["pd_diagnosis"]
-
-        st.markdown("**✅ 症状群カテゴリ（マスタと一致）**")
-        st.write(diag["symptom_matched"] if diag["symptom_matched"] else "（なし）")
-
-        st.markdown("**✅ 薬剤・薬効群カテゴリ（マスタと一致）**")
-        st.write(diag["drug_matched"] if diag["drug_matched"] else "（なし）")
-
-        st.markdown("**⚠️ 未対応：症状群カテゴリ（手動登録が必要）**")
-        if diag["symptom_unmatched"]:
-            for cat in diag["symptom_unmatched"]:
-                st.warning(
-                    f"「{cat}」列が抗がん剤副作用マスタにありません。"
-                    f"[スプレッドシートを開く]({SPREADSHEET_URL})で"
-                    f"「{cat}」列を末尾に追加し、各薬剤を確認して該当するものに○をつけ、"
-                    f"出典・登録日を記入してください。"
-                )
-        else:
-            st.success("未対応の症状群カテゴリはありません")
-
-        st.markdown("**⚠️ 未対応：薬剤・薬効群カテゴリ（手動登録が必要）**")
-        if diag["drug_unmatched"]:
-            for cat in diag["drug_unmatched"]:
-                st.warning(
-                    f"「{cat}」列が抗がん剤副作用マスタにありません。"
-                    f"[スプレッドシートを開く]({SPREADSHEET_URL})で"
-                    f"「{cat}」列を末尾に追加し、各薬剤を確認して該当するものに○をつけ、"
-                    f"出典・登録日を記入してください。"
-                )
-        else:
-            st.success("未対応の薬剤・薬効群カテゴリはありません")
-
-        if diag["no_type"]:
-            st.markdown("**❓ 種別未設定のカテゴリ**")
-            st.write(diag["no_type"])
-            st.caption("Pdシートの「種別」列に「症状群」または「薬剤・薬効群」を設定してください。")
-
-
+# Pd整合性チェック機能は 5_新薬メンテナンス.py に移動しました
 
 regimen_list = [
     f"{b['プロトコールNo']}　{b['レジメン名']}"
