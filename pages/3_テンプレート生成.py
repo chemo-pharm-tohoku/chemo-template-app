@@ -2760,6 +2760,17 @@ if st.button(
     st.switch_page("pages/4_O欄Pd欄生成.py")
 
 st.divider()
+st.subheader("📄 説明書生成（患者さん説明用スケジュール表）")
+st.caption("ダウンロード不要・画面からコピーしてWordに貼り付けて編集・印刷できます")
+if st.button(
+    "📄 説明書生成ページへ",
+    type="primary",
+    use_container_width=True,
+    key="btn_go_schedule_gen"
+):
+    st.switch_page("pages/6_説明書生成.py")
+
+st.divider()
 st.subheader("📁 ファイル生成")
 col_excel, col_pptx = st.columns(2)
 
