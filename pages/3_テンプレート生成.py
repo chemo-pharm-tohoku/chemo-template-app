@@ -376,37 +376,43 @@ def show_ae_register_ui(unregistered, ae_data, master_data, drug_data, basic_dat
                             else:
                                 raise _e3
 
-                # 副作用マスタの行を探して更新
+                # 副作用マスタの行を探して更新（無ければ新規追加）
                 ae_codes = [row[0] for row in ae_all]
+                from openpyxl.utils import get_column_letter as gcl
+
+                final_checked = {
+                    col: st.session_state.get(f"cb_{code}_{col}", False)
+                    for col in ae_columns
+                }
+
                 if code in ae_codes:
                     row_idx = ae_codes.index(code) + 1
-                    # セッションステートから最新のチェック状態を取得
-                    final_checked = {
-                        col: st.session_state.get(f"cb_{code}_{col}", False)
-                        for col in ae_columns
-                    }
                     update_vals = [
                         ['○' if final_checked.get(col, False) else '' for col in ae_columns]
                         + [today]
                     ]
-                    # 列文字を正確に指定
-                    from openpyxl.utils import get_column_letter as gcl
                     start_col = gcl(3)
                     end_col   = gcl(2 + len(ae_columns) + 1)
                     ws_ae.update(
                         range_name=f'{start_col}{row_idx}:{end_col}{row_idx}',
                         values=update_vals
                     )
-
-                    st.success(f"✅ {name} の副作用を登録しました！")
-                    st.session_state["ae_reg_done"].append(code)
-                    st.session_state["ae_reg_index"] += 1
-                    st.session_state.pop("ae_reg_ws", None)
-                    # 副作用マスタキャッシュをクリアして最新データを反映
-                    fetch_sheet_realtime.clear()
-                    st.rerun()
                 else:
-                    st.error(f"❌ {code} が副作用マスタに見つかりません")
+                    # 新規行を末尾に追加（管理コード・一般名・副作用フラグ・登録日）
+                    new_row = (
+                        [code, name]
+                        + ['○' if final_checked.get(col, False) else '' for col in ae_columns]
+                        + [today]
+                    )
+                    ws_ae.append_row(new_row, value_input_option="USER_ENTERED")
+
+                st.success(f"✅ {name} の副作用を登録しました！")
+                st.session_state["ae_reg_done"].append(code)
+                st.session_state["ae_reg_index"] += 1
+                st.session_state.pop("ae_reg_ws", None)
+                # 副作用マスタキャッシュをクリアして最新データを反映
+                fetch_sheet_realtime.clear()
+                st.rerun()
             except Exception as e:
                 st.error(f"❌ 登録エラー: {e}")
 
