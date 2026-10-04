@@ -674,15 +674,18 @@ if submitted:
             sh = gc.open_by_url(SPREADSHEET_URL)
             ws_master = sh.worksheet("薬品マスタ")
 
+            # 現在の実際の最終行を明示的に取得（append_rowの自動検出に依存しない）
+            all_codes_before = ws_master.col_values(1)
+            actual_row = len(all_codes_before) + 1
+
             row = [
                 new_code,
                 name_full.strip(),
-                "",
+                f"=ASC(B{actual_row})",
                 brand_full.strip() or name_full.strip(),
-                "",
+                f"=ASC(D{actual_row})",
                 final_category,
                 final_kubun,
-                final_shiji_bunrui,
                 tani.strip() if 'tani' in dir() else "",
                 toyokeiro.strip() if 'toyokeiro' in dir() else "",
                 kibo_eki.strip() if 'kibo_eki' in dir() else "",
@@ -696,19 +699,11 @@ if submitted:
                 alias.strip() if 'alias' in dir() else "",
                 tanshuku.strip() if 'tanshuku' in dir() else "",
             ]
-            ws_master.append_row(row, value_input_option="USER_ENTERED")
-
-            # 実際に追加された行番号を取得してから数式を書き込む（REF対策）
-            all_codes = ws_master.col_values(1)
-            actual_row = len(all_codes)  # append_row直後の最終行＝今追加した行
+            # append_rowではなく、明示した行番号へupdateで書き込む（上書き事故防止）
+            end_col_letter = chr(ord('A') + len(row) - 1)
             ws_master.update(
-                range_name=f'C{actual_row}',
-                values=[[f"=ASC(B{actual_row})"]],
-                value_input_option="USER_ENTERED",
-            )
-            ws_master.update(
-                range_name=f'E{actual_row}',
-                values=[[f"=ASC(D{actual_row})"]],
+                range_name=f'A{actual_row}:{end_col_letter}{actual_row}',
+                values=[row],
                 value_input_option="USER_ENTERED",
             )
 
@@ -721,6 +716,7 @@ if submitted:
                 st.session_state["ae_pending_name"] = name_full.strip()
 
             fetch_sheet_realtime.clear()
+            load_all_data.clear()
             st.rerun()
         except Exception as e:
             st.error(f"❌ 登録エラー: {e}")
