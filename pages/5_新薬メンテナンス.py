@@ -431,7 +431,6 @@ if pending_match:
                     key=f"btn_load_pending_{product_name}",
                     use_container_width=True,
                 ):
-                    st.session_state["newdrug_brand_prefill"] = product_name
                     st.session_state["newdrug_brand_full"] = product_name
                     st.session_state["scroll_hint_product"] = product_name
                     st.rerun()
@@ -534,7 +533,7 @@ if missing:
             key=f"btn_load_missing_{code}",
         ):
             st.session_state["newdrug_fixed_code"] = code
-            st.session_state["newdrug_brand_prefill"] = info['name']
+            st.session_state["newdrug_brand_full"] = info['name']
             st.session_state["load_hint_code"] = code
             st.rerun()
         if st.session_state.get("load_hint_code") == code:
@@ -567,7 +566,6 @@ if fixed_code:
         st.rerun()
 brand_full = st.text_input(
     "① 採用商品名（全角）　※規格・銘柄名は省略し、一般名と同一表記で可",
-    value=st.session_state.get("newdrug_brand_prefill", ""),
     key="newdrug_brand_full",
 )
 
@@ -724,7 +722,8 @@ if submitted:
 
             st.success(f"✅ {new_code}（{name_full}）を薬品マスタに登録しました！")
             st.session_state.pop("newdrug_fixed_code", None)
-            st.session_state.pop("newdrug_brand_prefill", None)
+            st.session_state.pop("newdrug_brand_full", None)
+            st.session_state.pop("newdrug_name_full", None)
 
             if new_code.upper().startswith("AC"):
                 st.session_state["ae_pending_code"] = new_code
