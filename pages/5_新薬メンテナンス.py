@@ -348,12 +348,6 @@ for d in drug_data:
     info['protocols'].add(str(d.get('プロトコールNo', '')).strip())
     info['rows'].append(d)
 
-# 診断用：missingに「要確認」系の文字列が紛れていないか確認表示
-if missing:
-    for code in list(missing.keys()):
-        if '要確認' in code or '確認' in code:
-            st.caption(f"🔍 診断：怪しいコードの文字コード一覧 → {[hex(ord(c)) for c in code]}")
-
 if pending_match:
     st.warning(f"⚠️ 管理コードが「要確認」の薬剤が {len(pending_match)} 種類あります")
     for product_name, info in pending_match.items():
@@ -423,6 +417,14 @@ for d in drug_data:
         'protocols': set(),
     })
     info['protocols'].add(str(d.get('プロトコールNo', '')).strip())
+
+# 診断用：missingに「要確認」系の文字列が紛れていないか確認表示
+for _diag_code in list(missing.keys()):
+    if '確認' in _diag_code:
+        st.caption(
+            f"🔍 診断：怪しいコードの文字コード一覧 → "
+            f"{[hex(ord(c)) for c in _diag_code]}"
+        )
 
 if missing:
     st.warning(f"⚠️ 薬品マスタに未登録のコードが {len(missing)} 件あります")
