@@ -286,96 +286,24 @@ def show_ae_register_ui(unregistered, ae_data, master_data, drug_data, basic_dat
     st.divider()
     st.subheader(f"💊 副作用登録 ({idx+1}/{len(unregistered)}）：{name}")
 
-    # ---------- Gemini副作用抽出UI ----------
-    with st.expander("🤖 AIで副作用を自動抽出する", expanded=True):
-        # 薬品マスタから採用商品名を取得
-        brand_name = next(
-            (m.get('採用商品名（全角）', name)
-             for m in master_data
-             if str(m.get('管理コード', '')).strip() == code),
-            name
-        )
-        brand_display = f"{name}（{brand_name}）" if brand_name != name else name
+    # ---------- 添付文書参照リンク（手動確認用） ----------
+    brand_name = next(
+        (m.get('採用商品名（全角）', name)
+         for m in master_data
+         if str(m.get('管理コード', '')).strip() == code),
+        name
+    )
+    brand_display = f"{name}（{brand_name}）" if brand_name != name else name
 
-        st.markdown(
-            f"**{brand_display}** の添付文書テキストを貼り付けてください"
-        )
-        st.caption(
-            f"💡 [PMDAで検索](https://www.pmda.go.jp/PmdaSearch/iyakuSearch/) "
-            f"→「{brand_name}」を検索 → 添付文書を開く → テキストを全選択してコピー"
-        )
-
-        pmda_text = st.text_area(
-            "添付文書テキストをここに貼り付け",
-            height=200,
-            key=f"pmda_text_{code}",
-            placeholder="添付文書のテキストをコピーしてここに貼り付けてください..."
-        )
-
-        if st.button(
-            f"🤖 {name} の副作用を自動抽出",
-            type="primary",
-            use_container_width=True,
-            key=f"btn_gemini_ae_{code}"
-        ):
-            if not pmda_text.strip():
-                st.warning("⚠️ 添付文書テキストを貼り付けてください")
-            else:
-                with st.spinner("AIが副作用を抽出中...⏳"):
-                    try:
-                        from google import genai as _genai
-                        _client = _genai.Client(api_key=st.secrets["gemini"]["api_key"])
-
-                        # 副作用抽出定義書をスプレッドシートから取得
-                        _gc_ae = get_gspread_client()
-                        _sh_ae = _gc_ae.open_by_url(SPREADSHEET_URL)
-                        _ws_ae_def = _sh_ae.worksheet("副作用抽出定義書")
-                        ae_definition = _ws_ae_def.acell("A1").value
-
-                        prompt = f"""{ae_definition}
-
-## 対象薬剤
-管理コード：{code}
-一般名：{name}
-
-## 添付文書テキスト
-{pmda_text}
-
-上記の添付文書テキストのみを参照して判定し、
-ヘッダー行なしで1行のCSV形式で出力してください。
-出力例：{code},{name},○,○,,,,,,
-"""
-                        response = _client.models.generate_content(
-                            model="gemini-2.5-flash",
-                            contents=prompt
-                        )
-                        raw_csv = response.text.strip()
-
-                        # コードブロック除去
-                        raw_csv = re.sub(r'```[^`]*```', '', raw_csv).strip()
-
-                        # ヘッダー行を除去（管理コードで始まらない行を除く）
-                        lines = [l.strip() for l in raw_csv.splitlines() if l.strip()]
-                        csv_line = next(
-                            (l for l in lines if l.startswith(code)),
-                            lines[0] if lines else ""
-                        )
-
-                        st.success(f"✅ 抽出完了：{csv_line}")
-
-                        # チェックボックスに反映
-                        parts = [p.strip() for p in csv_line.split(',')]
-                        if len(parts) >= len(ae_columns) + 2:
-                            for i, col_name in enumerate(ae_columns):
-                                val = parts[i + 2] if i + 2 < len(parts) else ''
-                                st.session_state[f"cb_{code}_{col_name}"] = (val == '○')
-                            st.session_state[f"gemini_applied_{code}"] = True
-                            st.rerun()
-                        else:
-                            st.warning(f"⚠️ 抽出結果の列数が不足しています：{csv_line}")
-
-                    except Exception as e:
-                        st.error(f"❌ 抽出エラー: {e}")
+    st.info(
+        f"📄 **{brand_display}** の添付文書・インタビューフォームを確認し、"
+        "「重大な副作用」「その他の副作用」「モニタリング項目」等に記載のある"
+        "副作用に、下のチェックボックスで○をつけてください。"
+    )
+    st.caption(
+        f"💡 [PMDAで検索](https://www.pmda.go.jp/PmdaSearch/iyakuSearch/) "
+        f"→「{brand_name}」を検索 → 添付文書を開いて目視確認してください"
+    )
 
     # ---------- チェックボックス ----------
     st.markdown("**副作用をチェックしてください**")
