@@ -1515,6 +1515,27 @@ def create_excel(protocol_no, basic_data, drug_data,
         ws3[f'B{srow}'].alignment = Alignment(horizontal='right')
         srow += 1
 
+    oral_cancer_drugs_seal = [d for d in drugs if str(d.get('①O欄_内服抗がん薬','')) == '○']
+    if oral_cancer_drugs_seal:
+        srow += 1
+        ws3.merge_cells(f'A{srow}:B{srow}')
+        ws3[f'A{srow}'] = '＜内服抗がん薬＞'
+        ws3[f'A{srow}'].font = Font(bold=True)
+        srow += 1
+        for drug in oral_cancer_drugs_seal:
+            code_oc_seal   = str(drug.get('管理コード',''))
+            master_oc_seal = master_dict.get(code_oc_seal, {})
+            name_oc_seal   = to_half_kana(str(master_oc_seal.get('一般名（全角）','') or drug.get('商品名','')))
+            day_oc_seal      = str(drug.get('投与Day文字','') or '').strip()
+            day_part_oc_seal = f"({day_oc_seal})" if day_oc_seal else ""
+            text_oc_seal   = str(drug.get('投与量数値','') or '').strip()
+            ws3.merge_cells(f'A{srow}:B{srow}')
+            ws3[f'A{srow}'] = f"{name_oc_seal}{day_part_oc_seal}{text_oc_seal}"
+            ws3[f'A{srow}'].font = FONT_NORMAL
+            ws3[f'A{srow}'].alignment = Alignment(wrap_text=True)
+            ws3.row_dimensions[srow].height = 30
+            srow += 1
+
     srow += 1
     ws3.merge_cells(f'A{srow}:B{srow}')
     ws3[f'A{srow}'] = '＜支持療法＞'
@@ -2645,6 +2666,18 @@ if selected_basic and result:
             _seal_lines.append(f"{_nd2}\t\t\t({_day})")
         else:
             _seal_lines.append(f"{_nd2}\t処方量(mg)：\t=C{_dr}\t({_day})")
+
+    _oral_cancer_drugs_seal = [d for d in _drugs if str(d.get("①O欄_内服抗がん薬",""))=="○"]
+    if _oral_cancer_drugs_seal:
+        _seal_lines += ["", "＜内服抗がん薬＞\t\t\t"]
+        for _d in _oral_cancer_drugs_seal:
+            _code = str(_d.get("管理コード",""))
+            _m    = _mdict.get(_code, {})
+            _nh   = to_half_kana(str(_m.get("一般名（全角）","") or _d.get("商品名","")))
+            _day_val  = str(_d.get("投与Day文字","") or "").strip()
+            _day_part = f"({_day_val})" if _day_val else ""
+            _text_val = str(_d.get("投与量数値","") or "").strip()
+            _seal_lines.append(f"{_nh}{_day_part}{_text_val}\t\t\t")
 
     if _support_inj or _support_oral:
         _seal_lines += ["", "＜支持療法＞\t\t\t"]
