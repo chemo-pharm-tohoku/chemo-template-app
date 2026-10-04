@@ -117,6 +117,18 @@ def get_next_code(prefix, master_data):
     return f"{prefix}{next_num:03d}"
 
 
+def get_unique_values(master_data, column_name):
+    """薬品マスタから指定列のユニーク値一覧を取得（空欄・重複除く）"""
+    values = []
+    seen = set()
+    for m in master_data:
+        v = str(m.get(column_name, '')).strip()
+        if v and v not in seen:
+            seen.add(v)
+            values.append(v)
+    return sorted(values)
+
+
 def get_ae_columns(ae_data):
     if not ae_data:
         return []
@@ -560,6 +572,10 @@ if name_full_preview.strip():
             cand_name = str(cand.get('採用商品名（全角）', '') or cand.get('一般名（全角）', '')).strip()
             st.caption(f"→ **{cand_code}**：{cand_name}（既存のこのコードを使用してください）")
 
+category_options = get_unique_values(master_data, "薬効分類")
+kubun_options = get_unique_values(master_data, "薬剤区分")
+shiji_bunrui_options = get_unique_values(master_data, "支持療法分類")
+
 with st.form(key="form_newdrug"):
     name_full = name_full_preview
     st.caption(f"一般名（全角）：**{name_full or '（未入力）'}**")
@@ -568,9 +584,43 @@ with st.form(key="form_newdrug"):
         value=st.session_state.get("newdrug_brand_prefill", ""),
         key="newdrug_brand_full",
     )
-    category = st.text_input("薬効分類", key="newdrug_category")
-    kubun = st.text_input("薬剤区分", value=default_kubun, key="newdrug_kubun")
-    shiji_bunrui = st.text_input("支持療法分類（任意）", key="newdrug_shiji_bunrui")
+
+    category = st.selectbox(
+        "薬効分類　※既存リストから選択、無ければ下の「新しい薬効分類」に入力",
+        options=["（選択してください）"] + category_options,
+        key="newdrug_category_select",
+    )
+    category_new = st.text_input(
+        "新しい薬効分類（上で該当が無い場合のみ入力）",
+        key="newdrug_category_new",
+    )
+
+    kubun_default_idx = (
+        kubun_options.index(default_kubun) + 1
+        if default_kubun in kubun_options else 0
+    )
+    kubun = st.selectbox(
+        "薬剤区分　※既存リストから選択、無ければ下の「新しい薬剤区分」に入力",
+        options=["（選択してください）"] + kubun_options,
+        index=kubun_default_idx,
+        key="newdrug_kubun_select",
+    )
+    kubun_new = st.text_input(
+        "新しい薬剤区分（上で該当が無い場合のみ入力）",
+        key="newdrug_kubun_new",
+    )
+
+    shiji_bunrui = st.selectbox(
+        "支持療法分類（任意）",
+        options=["（なし）"] + shiji_bunrui_options + ["その他"],
+        key="newdrug_shiji_bunrui_select",
+    )
+    shiji_bunrui_other = ""
+    if shiji_bunrui == "その他":
+        shiji_bunrui_other = st.text_input(
+            "支持療法分類（その他の内容を入力）",
+            key="newdrug_shiji_bunrui_other",
+        )
 
     with st.expander("詳細項目（任意・必要な場合のみ入力）"):
         tani = st.text_input("単位", key="newdrug_tani")
@@ -596,8 +646,25 @@ with st.form(key="form_newdrug"):
     )
 
 if submitted:
+    final_category = category_new.strip() if category_new.strip() else (
+        category if category != "（選択してください）" else ""
+    )
+    final_kubun = kubun_new.strip() if kubun_new.strip() else (
+        kubun if kubun != "（選択してください）" else ""
+    )
+    if shiji_bunrui == "その他":
+        final_shiji_bunrui = shiji_bunrui_other.strip()
+    elif shiji_bunrui == "（なし）":
+        final_shiji_bunrui = ""
+    else:
+        final_shiji_bunrui = shiji_bunrui
+
     if not name_full.strip():
         st.error("⚠️ 一般名を入力してください")
+    elif not final_category:
+        st.error("⚠️ 薬効分類を選択または入力してください")
+    elif not final_kubun:
+        st.error("⚠️ 薬剤区分を選択または入力してください")
     else:
         try:
             gc = get_gspread_client()
@@ -610,9 +677,9 @@ if submitted:
                 "",
                 brand_full.strip() or name_full.strip(),
                 "",
-                category.strip(),
-                kubun.strip(),
-                shiji_bunrui.strip() if 'shiji_bunrui' in dir() else "",
+                final_category,
+                final_kubun,
+                final_shiji_bunrui,
                 tani.strip() if 'tani' in dir() else "",
                 toyokeiro.strip() if 'toyokeiro' in dir() else "",
                 kibo_eki.strip() if 'kibo_eki' in dir() else "",
