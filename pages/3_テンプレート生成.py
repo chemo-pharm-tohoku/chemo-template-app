@@ -2802,6 +2802,7 @@ if selected_basic and result:
                .replace("`", "\\`")
                .replace("\n", "\\n")
                .replace("\r", "\\r")
+               .replace("\t", "\\t")
                .replace('"', "&quot;")
                .replace("'", "&#39;"))
         _html = (
