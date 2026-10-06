@@ -2604,6 +2604,36 @@ if selected_basic and result:
             if str(_cv).strip() == "○":
                 _ae_flags_tsv[_cn] = True
 
+    # ===== カルボプラチン確認項目ブロック（TSV） =====
+    _auc_drug_tsv = next(
+        (d for d in _cancer_drugs if str(d.get('用量根拠', '')) == 'AUC依存'),
+        None
+    )
+    if _auc_drug_tsv:
+        try:
+            _rv_cb2 = str(_auc_drug_tsv.get('投与量数値', '') or '').strip()
+            _rv_cb2 = ''.join(c for c in _rv_cb2 if c.isdigit() or c == '.')
+            _auc_num_tsv = float(_rv_cb2 or 0)
+        except:
+            _auc_num_tsv = 0
+        _auc_disp_tsv = (
+            int(_auc_num_tsv) if _auc_num_tsv == int(_auc_num_tsv) else _auc_num_tsv
+        )
+        _cbdca_special_tsv = str(selected_basic.get('CBDCA特例', '')).strip() == '○'
+
+        _o_lines.append("")
+        _o_lines.append("確認項目：\t\t\t\t\t\t")
+        _o_lines.append("＜検査日：　/　＞　　□当日採血あり\t\t\t\t\t\t")
+        _o_lines.append(f"Scr　　=B{_R_SCR}\t\t\t\t\t")
+        _o_lines.append(f"Ccr　　=TEXT(MIN(B{_R_CCR},125),\"0.0\")&\"（※上限125mL/min）\"\t\t\t\t\t")
+        _o_lines.append("CBDCA投与量の算出(Calvert式)\t\t\t\t\t\t")
+        _o_lines.append(f"CBDCA=(AUC　{_auc_disp_tsv}　)×(25+Ccr　　　　)＝　　　　mg/body\t\t\t\t\t\t")
+
+        if _cbdca_special_tsv:
+            _o_lines.append("　血清Cr値0.7未満では0.7に切り上げる\t\t\t\t\t\t")
+            _o_lines.append("　BMI 25以上ではBMI 25の体重に補正：BMI　　　　⇒BMI25の体重　　　kg\t\t\t\t\t\t")
+            _o_lines.append("　最大投与量900mg/body\t\t\t\t\t\t")
+
     # HBV
     _o_lines.append("")
     _o_lines.append("●B型肝炎スクリーニング\t\t\t\t\t\t")
@@ -2689,36 +2719,6 @@ if selected_basic and result:
         _cat  = str(_pda.get("カテゴリ名","")).strip()
         _text = str(_pda.get("説明文","")).strip().replace("\n","　").replace("\r","")
         _o_lines.append(f"【{_cat}】{_text}\t\t\t\t\t\t")
-    # ===== カルボプラチン確認項目ブロック（TSV） =====
-    _auc_drug_tsv = next(
-        (d for d in _cancer_drugs if str(d.get('用量根拠', '')) == 'AUC依存'),
-        None
-    )
-    if _auc_drug_tsv:
-        try:
-            _rv_cb2 = str(_auc_drug_tsv.get('投与量数値', '') or '').strip()
-            _rv_cb2 = ''.join(c for c in _rv_cb2 if c.isdigit() or c == '.')
-            _auc_num_tsv = float(_rv_cb2 or 0)
-        except:
-            _auc_num_tsv = 0
-        _auc_disp_tsv = (
-            int(_auc_num_tsv) if _auc_num_tsv == int(_auc_num_tsv) else _auc_num_tsv
-        )
-        _cbdca_special_tsv = str(selected_basic.get('CBDCA特例', '')).strip() == '○'
-
-        _o_lines.append("")
-        _o_lines.append("確認項目：\t\t\t\t\t\t")
-        _o_lines.append("＜検査日：　/　＞　　□当日採血あり\t\t\t\t\t\t")
-        _o_lines.append(f"Scr　　=B{_R_SCR}\t\t\t\t\t")
-        _o_lines.append(f"Ccr　　=TEXT(MIN(B{_R_CCR},125),\"0.0\")&\"（※上限125mL/min）\"\t\t\t\t\t")
-        _o_lines.append("CBDCA投与量の算出(Calvert式)\t\t\t\t\t\t")
-        _o_lines.append(f"CBDCA=(AUC　{_auc_disp_tsv}　)×(25+Ccr　　　　)＝　　　　mg/body\t\t\t\t\t\t")
-
-        if _cbdca_special_tsv:
-            _o_lines.append("　血清Cr値0.7未満では0.7に切り上げる\t\t\t\t\t\t")
-            _o_lines.append("　BMI 25以上ではBMI 25の体重に補正：BMI　　　　⇒BMI25の体重　　　kg\t\t\t\t\t\t")
-            _o_lines.append("　最大投与量900mg/body\t\t\t\t\t\t")
-
     _o_lines.append("※個別の薬剤に関する説明事項等も追記（必須）\t\t\t\t\t\t")
     
     _o_tsv = "\n".join(_o_lines)
