@@ -2624,8 +2624,8 @@ if selected_basic and result:
         _o_lines.append("")
         _o_lines.append("確認項目：\t\t\t\t\t\t")
         _o_lines.append("＜検査日：　/　＞　　□当日採血あり\t\t\t\t\t\t")
-        _o_lines.append(f"Scr　　=B{_R_SCR}\t\t\t\t\t\t")
-        _o_lines.append(f"Ccr　　=TEXT(MIN(B{_R_CCR},125),\"0.0\")&\"（※上限125mL/min）\"\t\t\t\t\t\t")
+        _o_lines.append(f"Scr　　\t=B{_R_SCR}\t\t\t\t\t")
+        _o_lines.append(f"Ccr　　\t=TEXT(MIN(B{_R_CCR},125),\"0.0\")&\"（※上限125mL/min）\"\t\t\t\t\t")
         _o_lines.append("CBDCA投与量の算出(Calvert式)\t\t\t\t\t\t")
         _o_lines.append(f"CBDCA=(AUC　{_auc_disp_tsv}　)×(25+Ccr　　　　)＝　　　　mg/body\t\t\t\t\t\t")
 
