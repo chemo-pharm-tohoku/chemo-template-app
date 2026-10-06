@@ -437,10 +437,8 @@ def build_o_text(protocol_no, basic_data, drug_data, master_data,
 
         lines.append("")
         lines.append("確認項目：")
-        lines.append("＜検査日：　/　＞　　□当日採血あり")
         lines.append(f"Scr　　{scr_disp}")
         lines.append(f"Ccr　　{ccr_disp}（※上限125mL/min）")
-        lines.append("CBDCA投与量の算出(Calvert式)")
         lines.append(f"CBDCA=(AUC　{auc_disp}　)×(25+Ccr　　　　)＝　　　　mg/body")
 
         if cbdca_special:
