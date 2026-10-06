@@ -218,4 +218,20 @@ with st.container(border=True):
         else:
             st.caption(f"⚠️ {label}（未配置：manuals/{prefix}*.pdf）")
 st.divider()
+        else:
+            st.caption(f"⚠️ {label}（未配置：manuals/{prefix}*.pdf）")
+st.divider()
 
+# ===== システム改善要望 =====
+st.subheader("📝 システム改善要望")
+
+with st.container(border=True):
+    st.write(
+        "アプリの不具合・使いにくい点・追加してほしい機能などがあれば、"
+        "以下のフォームからご連絡ください。"
+    )
+    st.link_button(
+        "📝 システム改善要望フォームはこちら",
+        "https://forms.gle/DNzaqpwMz9E1qBGz7",
+        use_container_width=True,
+    )
