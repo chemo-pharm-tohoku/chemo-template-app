@@ -1186,8 +1186,16 @@ if "extracted_parsed" in st.session_state:
         # ===== 婦人科AUC=6特例の確認 =====
         st.divider()
         cbdca_special_default = str(parsed.get("cbdca_special_flag", "")).strip() == "○"
+        st.markdown(
+            "<div style='background-color:#FFF3CD; border:2px solid #F0AD4E; "
+            "border-radius:8px; padding:12px 16px; margin-bottom:4px;'>"
+            "<span style='font-size:20px; font-weight:bold; color:#856404;'>"
+            "⚠️ 婦人科のAUC=6のTC・DC療法ですか？"
+            "</span></div>",
+            unsafe_allow_html=True,
+        )
         cbdca_special = st.checkbox(
-            "婦人科のAUC=6のTC・DC療法ですか？（該当する場合はチェック）",
+            "該当する場合はチェックしてください",
             value=cbdca_special_default,
             key="cbdca_special_checkbox",
             help=(
