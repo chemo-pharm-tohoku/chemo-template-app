@@ -115,7 +115,8 @@ def calc_dose(drug, bsa, bw, ccr):
     elif dose_base == 'AUC依存':
         if ccr is None:
             return '未入力'
-        val = round((ccr + 25) * dose_num, 0)
+        ccr_for_calc = min(ccr, 125)
+        val = round((ccr_for_calc + 25) * dose_num, 0)
         return f"{int(val)}mg"
     elif dose_base == 'BW依存':
         if bw is None:
@@ -147,7 +148,8 @@ def calc_dose_num(drug, bsa, bw, ccr):
     elif dose_base == 'AUC依存':
         if ccr is None:
             return None
-        return round((ccr + 25) * dose_num, 0)
+        ccr_for_calc = min(ccr, 125)
+        return round((ccr_for_calc + 25) * dose_num, 0)
     elif dose_base == 'BW依存':
         if bw is None:
             return None
