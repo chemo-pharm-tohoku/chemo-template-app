@@ -453,28 +453,36 @@ def build_o_text(protocol_no, basic_data, drug_data, master_data,
 
 # ===== O欄＋Pd欄テキスト生成 =====
 
-    _AE_ITEMS_TSV = [
-        (f"●{_ae_pad('嘔吐')}　□なし　□あり　(嘔吐回数;　　　)", True, None),
-        (f"●{_ae_pad('悪心')}　□なし　□G1　　□G2　　□G3", True, None),
-        (f"●{_ae_pad('食欲不振')}　□なし　□G1　　□G2　　□G3　　□G4", True, None),
-        (f"●{_ae_pad('便秘')}　□なし　□あり　（ベースライン 回数：、BS：）", True, None),
-        (f"●{_ae_pad('下痢')}　□なし　□あり　（ベースライン 回数：、BS：）", True, None),
-        (f"●{_ae_pad('口腔粘膜炎')}　□なし　□G1　　□G2　　□G3　　□G4", True, None),
-        (f"●{_ae_pad('倦怠感')}　□なし　□G1　　□G2　　□G3", True, None),
-        ("__BONE_MARROW__", True, None),
-        (f"●{_ae_pad('肝機能障害')}　□なし　□あり", True, None),
-        (f"●{_ae_pad('腎機能障害')}　□なし　□あり", True, None),
-        (f"●{_ae_pad('脱毛')}　□なし　□G1　　□G2", True, None),
-        (f"●{_ae_pad('末梢神経障害')}　□なし　□G1　　□G2　　□G3　　□G4", True, None),
-        (f"●{_ae_pad('味覚異常')}　□なし　□G1　　□G2", True, None),
-        (f"●{_ae_pad('電解質異常')}　□なし　□あり", True, None),
-        (f"●{_ae_pad('IRR')}　□なし　□あり", True, None),
-        (f"●{_ae_pad('手足症候群')}　□なし　□G1　　□G2　　□G3", True, None),
-        ("●皮膚障害　　　　□なし　□あり", False, "皮膚障害"),
-        ("●間質性肺炎　　　□なし　□あり", False, "間質性肺炎"),
-        ("●心障害　　　　　□なし　□あり", False, "心障害"),
-        ("●その他（　　　　　　　　　　　）", True, None),
-    ]
+AE_ITEMS = [
+    (f"●{_ae_pad('嘔吐')}　□なし　□あり　(嘔吐回数;　　　)", True, None),
+    (f"●{_ae_pad('悪心')}　□なし　□G1　　□G2　　□G3", True, None),
+    (f"●{_ae_pad('食欲不振')}　□なし　□G1　　□G2　　□G3　　□G4", True, None),
+    (f"●{_ae_pad('便秘')}　□なし　□あり　（ベースライン 回数：、BS：）", True, None),
+    (f"●{_ae_pad('下痢')}　□なし　□あり　（ベースライン 回数：、BS：）", True, None),
+    (f"●{_ae_pad('口腔粘膜炎')}　□なし　□G1　　□G2　　□G3　　□G4", True, None),
+    (f"●{_ae_pad('倦怠感')}　□なし　□G1　　□G2　　□G3", True, None),
+    (
+        "●骨髄抑制\n"
+        f"　　{_ae_pad('WBC', 5)}　□なし　□G1　　□G2　　□G3　　□G4\n"
+        f"　　{_ae_pad('Neut', 5)}　□なし　□G1　　□G2　　□G3　　□G4\n"
+        f"　　{_ae_pad('Hb', 5)}　□なし　□G1　　□G2　　□G3　　□G4\n"
+        f"　　{_ae_pad('PLT', 5)}　□なし　□G1　　□G2　　□G3　　□G4",
+        True, None
+    ),
+    (f"●{_ae_pad('肝機能障害')}　□なし　□あり", True, None),
+    (f"●{_ae_pad('腎機能障害')}　□なし　□あり", True, None),
+    (f"●{_ae_pad('脱毛')}　□なし　□G1　　□G2", True, None),
+    (f"●{_ae_pad('末梢神経障害')}　□なし　□G1　　□G2　　□G3　　□G4", True, None),
+    (f"●{_ae_pad('味覚異常')}　□なし　□G1　　□G2", True, None),
+    (f"●{_ae_pad('電解質異常')}　□なし　□あり", True, None),
+    (f"●{_ae_pad('IRR')}　□なし　□あり", True, None),
+    (f"●{_ae_pad('手足症候群')}　□なし　□G1　　□G2　　□G3", True, None),
+    ("●皮膚障害　　　　□なし　□あり", False, "皮膚障害"),
+    ("●間質性肺炎　　　□なし　□あり", False, "間質性肺炎"),
+    ("●心障害　　　　　□なし　□あり", False, "心障害"),
+    ("●その他（　　　　　　　　　　　）", True, None),
+]
+
 
 IRAE_ITEMS = [
     "　●IRR　　　　　　　　　　　　□なし　□あり",
