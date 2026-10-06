@@ -333,6 +333,7 @@ def build_o_text(protocol_no, basic_data, drug_data, master_data,
     lines.append("")
 
     # 抗がん剤行
+    auc_target_value = None
     for drug in cancer_drugs:
         code      = str(drug['管理コード'])
         master    = master_dict.get(code, {})
@@ -346,6 +347,9 @@ def build_o_text(protocol_no, basic_data, drug_data, master_data,
         except:
             dose_num = 0
         day_str = str(drug.get('投与Day文字', ''))
+
+        if dose_base == 'AUC依存':
+            auc_target_value = dose_num
 
         # 計算用量
         calc     = calc_dose(drug, bsa, bw, ccr)
@@ -423,6 +427,26 @@ def build_o_text(protocol_no, basic_data, drug_data, master_data,
             text_val = str(d.get('投与量数値', '') or '').strip()
             oral_cancer_parts.append(f"{name}{day_part}{text_val}")
         lines.append("内服抗がん薬：" + "､".join(oral_cancer_parts))
+
+    # ===== カルボプラチン確認項目ブロック =====
+    if auc_target_value is not None:
+        cbdca_special = str(basic.get('CBDCA特例', '')).strip() == '○'
+        auc_disp = int(auc_target_value) if auc_target_value == int(auc_target_value) else auc_target_value
+        scr_disp = scr if scr is not None else ''
+        ccr_disp = ccr if ccr is not None else ''
+
+        lines.append("")
+        lines.append("確認項目：")
+        lines.append("＜検査日：　/　＞　　□当日採血あり")
+        lines.append(f"Scr　　{scr_disp}")
+        lines.append(f"Ccr　　{ccr_disp}（※上限125mL/min）")
+        lines.append("CBDCA投与量の算出(Calvert式)")
+        lines.append(f"CBDCA=(AUC　{auc_disp}　)×(25+Ccr　　　　)＝　　　　mg/body")
+
+        if cbdca_special:
+            lines.append("　血清Cr値0.7未満では0.7に切り上げる")
+            lines.append("　BMI 25以上ではBMI 25の体重に補正：BMI　　　　⇒BMI25の体重　　　kg")
+            lines.append("　最大投与量900mg/body")
 
     return "\n".join(lines)
 
