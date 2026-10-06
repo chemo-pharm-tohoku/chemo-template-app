@@ -1345,11 +1345,11 @@ def create_excel(protocol_no, basic_data, drug_data,
             ws1.cell(row=row, column=4).fill = FILL_CALC; ws1.cell(row=row, column=4).border = BORDER
             ws1.cell(row=row, column=4).alignment = Alignment(horizontal='center')
         elif dose_base == 'AUC依存':
-            ws1.cell(row=row, column=2).value = f'=IFERROR(ROUND((B{CCR_ROW}+25)*{dose_num},0)&"mg","")'
+            ws1.cell(row=row, column=2).value = f'=IFERROR(ROUND((MIN(B{CCR_ROW},125)+25)*{dose_num},0)&"mg","")'
             ws1.cell(row=row, column=2).fill = FILL_CALC; ws1.cell(row=row, column=2).border = BORDER
             ws1.cell(row=row, column=2).alignment = Alignment(horizontal='center')
             ws1.cell(row=row, column=3).fill = FILL_INPUT; ws1.cell(row=row, column=3).border = BORDER
-            ws1.cell(row=row, column=4).value = f'=IFERROR(TEXT(C{row}/((B{CCR_ROW}+25)*{dose_num})*100,"0.0")&"%","")'
+            ws1.cell(row=row, column=4).value = f'=IFERROR(TEXT(C{row}/((MIN(B{CCR_ROW},125)+25)*{dose_num})*100,"0.0")&"%","")'
             ws1.cell(row=row, column=4).fill = FILL_CALC; ws1.cell(row=row, column=4).border = BORDER
             ws1.cell(row=row, column=4).alignment = Alignment(horizontal='center')
         elif dose_base == 'BW依存':
@@ -2443,7 +2443,7 @@ if selected_basic and result:
             _formula   = f"=B{_R_BSA}*{_dnum}"
             _name_disp = f"{_name}({_dn}mg/m²)"
         elif _dbase == "AUC依存":
-            _formula   = f"=(B{_R_CCR}+25)*{_dnum}"
+            _formula   = f"=(MIN(B{_R_CCR},125)+25)*{_dnum}"
             _name_disp = f"{_name}(AUC{_dn})"
         elif _dbase == "BW依存":
             _formula   = f"=B{_R_BW}*{_dnum}"
