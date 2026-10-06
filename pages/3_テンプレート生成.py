@@ -91,7 +91,7 @@ def load_all_data():
     ae_data     = fetch_sheet_realtime("抗がん剤副作用マスタ")  # 1分
     return basic_data, drug_data, master_data, notes_data, pd_data, ae_data
 
-    SJIS_SAFE_REPLACEMENTS = {
+SJIS_SAFE_REPLACEMENTS = {
     "\u2014": "ー", "\u2013": "-", "\u2212": "-",
     "\u2018": "'", "\u2019": "'", "\u201C": "\"", "\u201D": "\"",
     "\u2022": "・", "\u00A0": " ", "\u200B": "", "\uFEFF": "",
