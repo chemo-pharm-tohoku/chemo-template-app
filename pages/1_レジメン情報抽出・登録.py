@@ -1243,6 +1243,7 @@ if "extracted_parsed" in st.session_state and not st.session_state.get("register
                                            if r and r[0]==protocol_no]):
                             ws_drug.delete_rows(i)
 
+                    cbdca_special_flag = str(data.get("cbdca_special_flag", "")).strip()
                     basic_row = [
                         protocol_no,
                         regimen_name,
@@ -1251,6 +1252,7 @@ if "extracted_parsed" in st.session_state and not st.session_state.get("register
                         get_val(info, "remarks", "備考", default=""),
                         today,
                         "",
+                        cbdca_special_flag,
                     ]
                     ws_basic.append_row(basic_row, value_input_option="USER_ENTERED")
 
