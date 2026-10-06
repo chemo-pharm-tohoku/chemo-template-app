@@ -442,10 +442,10 @@ def build_o_text(protocol_no, basic_data, drug_data, master_data,
         lines.append(f"CBDCA=(AUC　{auc_disp}　)×(25+Ccr　　　　)＝　　　　mg/body")
 
         if cbdca_special:
-            _o_lines.append("※婦人科のAUC=6のTC・DC療法\t\t\t\t\t\t")
-            _o_lines.append("　血清Cr値0.7未満では0.7に切り上げる\t\t\t\t\t\t")
-            _o_lines.append("　BMI 25以上ではBMI 25の体重に補正：BMI　　　　⇒BMI25の体重　　　kg\t\t\t\t\t\t")
-            _o_lines.append("　最大投与量900mg/body\t\t\t\t\t\t")
+            lines.append("※婦人科のAUC=6のTC・DC療法")
+            lines.append("　血清Cr値0.7未満では0.7に切り上げる")
+            lines.append("　BMI 25以上ではBMI 25の体重に補正：BMI　　　　⇒BMI25の体重　　　kg")
+            lines.append("　最大投与量900mg/body")
 
     return "\n".join(lines)
 
