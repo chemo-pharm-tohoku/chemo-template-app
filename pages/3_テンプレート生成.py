@@ -122,7 +122,6 @@ def _ae_pad(label, width=6):
 
 
 def to_half_kana(text):
-def to_half_kana(text):
     table = {
         'ア':'ｱ','イ':'ｲ','ウ':'ｳ','エ':'ｴ','オ':'ｵ',
         'カ':'ｶ','キ':'ｷ','ク':'ｸ','ケ':'ｹ','コ':'ｺ',
