@@ -1491,6 +1491,7 @@ def create_excel(protocol_no, basic_data, drug_data,
         ]
         if cbdca_special_flag:
             confirm_lines += [
+                '"※婦人科のAUC=6のTC・DC療法"',
                 '"　血清Cr値0.7未満では0.7に切り上げる"',
                 '"　BMI 25以上ではBMI 25の体重に補正：BMI　　　　⇒BMI25の体重　　　kg"',
                 '"　最大投与量900mg/body"',
