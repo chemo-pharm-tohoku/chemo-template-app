@@ -888,7 +888,7 @@ st.subheader("STEP 1　確認票をコピー＆ペースト")
 
 st.markdown(
     "<p style='color:red; font-weight:bold; font-size:16px;'>"
-    "「化学療法確認票マスタ印刷ツール」は、診療支援端末Eドライブ直下に配置されています"
+    "「化学療法確認票マスタ印刷ツール」を診療支援端末Eドライブに配置し、確認票印刷後にデスクトップにエクセルファイルが保存されます"
     "</p>",
     unsafe_allow_html=True,
 )
