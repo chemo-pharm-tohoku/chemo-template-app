@@ -2629,6 +2629,7 @@ if selected_basic and result:
         _o_lines.append(f"CBDCA=(AUC　{_auc_disp_tsv}　)×(25+Ccr　　　　)＝　　　　mg/body\t\t\t\t\t\t")
 
         if _cbdca_special_tsv:
+            _o_lines.append("※婦人科のAUC=6のTC・DC療法\t\t\t\t\t\t")
             _o_lines.append("　血清Cr値0.7未満では0.7に切り上げる\t\t\t\t\t\t")
             _o_lines.append("　BMI 25以上ではBMI 25の体重に補正：BMI　　　　⇒BMI25の体重　　　kg\t\t\t\t\t\t")
             _o_lines.append("　最大投与量900mg/body\t\t\t\t\t\t")
