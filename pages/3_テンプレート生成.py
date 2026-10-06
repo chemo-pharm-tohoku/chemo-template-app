@@ -1463,6 +1463,40 @@ def create_excel(protocol_no, basic_data, drug_data,
     if support_line2: all_lines.append(support_line2)
     if oral_cancer_line: all_lines.append(oral_cancer_line)
 
+    # ===== カルボプラチン確認項目ブロック（Excel数式） =====
+    auc_drug_for_confirm = next(
+        (d for d in cancer_drugs if str(d.get('用量根拠', '')) == 'AUC依存'),
+        None
+    )
+    if auc_drug_for_confirm:
+        try:
+            _rv_cb = str(auc_drug_for_confirm.get('投与量数値', '') or '').strip()
+            _rv_cb = ''.join(c for c in _rv_cb if c.isdigit() or c == '.')
+            auc_num_for_confirm = float(_rv_cb or 0)
+        except:
+            auc_num_for_confirm = 0
+        auc_disp_for_confirm = (
+            int(auc_num_for_confirm)
+            if auc_num_for_confirm == int(auc_num_for_confirm)
+            else auc_num_for_confirm
+        )
+        cbdca_special_flag = str(basic.get('CBDCA特例', '')).strip() == '○'
+
+        confirm_lines = [
+            '"確認項目："',
+            f'"Scr　　"&{scr_ref}' if scr_ref else '"Scr　　"',
+            (f'"Ccr　　"&TEXT({ccr_ref},"0.0")&"（※上限125mL/min）"'
+             if ccr_ref else '"Ccr　　（※上限125mL/min）"'),
+            f'"CBDCA=(AUC　{auc_disp_for_confirm}　)×(25+Ccr　　　　)＝　　　　mg/body"',
+        ]
+        if cbdca_special_flag:
+            confirm_lines += [
+                '"　血清Cr値0.7未満では0.7に切り上げる"',
+                '"　BMI 25以上ではBMI 25の体重に補正：BMI　　　　⇒BMI25の体重　　　kg"',
+                '"　最大投与量900mg/body"',
+            ]
+        all_lines += ['"  "'] + confirm_lines
+                 
     ws2['A2'] = '=' + '&CHAR(10)&'.join(all_lines)
     ws2['A2'].alignment = Alignment(wrap_text=True, vertical='top')
     ws2['A2'].border    = BORDER_MEDIUM
