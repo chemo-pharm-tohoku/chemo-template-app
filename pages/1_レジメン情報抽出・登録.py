@@ -77,6 +77,10 @@ def get_val(d, *keys, default=""):
 def get_drugs(data):
     return data.get("drug_info") or data.get("drugs") or []
 
+def drugs_target_list_for_update(parsed):
+    """parsed内のdrug_info/drugsリストへの参照を返す（更新用）"""
+    return parsed.get("drug_info") or parsed.get("drugs") or []
+
 def get_basic(data):
     return data.get("basic_info") or {}
 
@@ -1129,14 +1133,58 @@ if "extracted_parsed" in st.session_state:
                 )
                 st.rerun()
 
-    # ===== カルボプラチン婦人科AUC=6特例の確認 =====
-    has_auc_drug = any(
-        str(d.get("dosage_basis", "")).strip() == "AUC依存"
-        for d in drug_list
-    )
-    if has_auc_drug:
+    # ===== カルボプラチンAUC値の手入力 =====
+    carboplatin_drugs = [
+        d for d in drug_list
+        if "カルボプラチン" in str(d.get("product_name", "")) + str(d.get("brand_name", ""))
+    ]
+    if carboplatin_drugs:
         st.divider()
-        st.markdown("#### 💊 カルボプラチン特例の確認")
+        st.markdown("#### 💊 カルボプラチン AUC値の入力")
+        st.warning(
+            "⚠️ 確認票の仕様上、カルボプラチンのAUC値はAIが自動抽出できません。"
+            "下に手入力してください。"
+        )
+
+        for idx, cb_drug in enumerate(carboplatin_drugs):
+            drug_order = cb_drug.get("order", "")
+            st.markdown(f"**カルボプラチン（投与順序：{drug_order}）**")
+            auc_input = st.number_input(
+                "AUC値を入力してください",
+                min_value=0.0,
+                max_value=15.0,
+                value=0.0,
+                step=0.5,
+                format="%.1f",
+                key=f"cb_auc_input_{idx}",
+            )
+
+            if st.button(
+                "✅ このAUC値を反映する",
+                key=f"btn_apply_auc_{idx}",
+                type="primary",
+            ):
+                if auc_input > 0:
+                    # drug_list内の該当薬剤を更新
+                    for d in drugs_target_list_for_update(parsed):
+                        if (
+                            "カルボプラチン" in str(d.get("product_name", "")) + str(d.get("brand_name", ""))
+                            and str(d.get("order", "")) == str(drug_order)
+                        ):
+                            d["dosage_value"] = auc_input
+                            d["dosage_unit"]  = "AUC"
+                            d["dosage_basis"] = "AUC依存"
+                    st.session_state["extracted_parsed"] = parsed
+                    st.session_state["extracted_json"] = json.dumps(
+                        parsed, ensure_ascii=False, indent=2
+                    )
+                    st.success(f"✅ AUC{auc_input} を反映しました！")
+                    st.rerun()
+                else:
+                    st.error("AUC値を入力してください。")
+
+        # ===== 婦人科AUC=6特例の確認 =====
+        st.divider()
         cbdca_special_default = str(parsed.get("cbdca_special_flag", "")).strip() == "○"
         cbdca_special = st.checkbox(
             "婦人科のAUC=6のTC・DC療法ですか？（該当する場合はチェック）",
@@ -1153,6 +1201,11 @@ if "extracted_parsed" in st.session_state:
         st.session_state["extracted_json"] = json.dumps(
             parsed, ensure_ascii=False, indent=2
         )
+
+    st.markdown("#### 💊 薬剤情報")
+    if drug_list:
+        import pandas as pd
+        st.dataframe(pd.DataFrame(drug_list), use_container_width=True)
 
     st.markdown("#### 💊 薬剤情報")
     if drug_list:
