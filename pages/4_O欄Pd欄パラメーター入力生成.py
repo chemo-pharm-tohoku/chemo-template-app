@@ -216,7 +216,37 @@ def get_ae_flags(protocol_no, drug_data, ae_data):
 
 
 # ===== O欄テキスト生成 =====
+SJIS_SAFE_REPLACEMENTS = {
+    "\u2014": "ー", "\u2013": "-", "\u2212": "-",
+    "\u2018": "'", "\u2019": "'", "\u201C": "\"", "\u201D": "\"",
+    "\u2022": "・", "\u00A0": " ", "\u200B": "", "\uFEFF": "",
+    "\u2713": "", "\u2714": "",
+    "\u00B2": "2", "\u00B3": "3", "\u00B9": "1", "\u2070": "0",
+    "\u2074": "4", "\u2075": "5", "\u2076": "6",
+    "\u2077": "7", "\u2078": "8", "\u2079": "9",
+}
 
+def sanitize_for_sjis(text):
+    """CP932(Shift-JIS)で変換できない文字を安全な文字に自動置換する"""
+    if not text:
+        return text
+    for bad, good in SJIS_SAFE_REPLACEMENTS.items():
+        text = text.replace(bad, good)
+    result_chars = []
+    for ch in text:
+        try:
+            ch.encode("cp932")
+            result_chars.append(ch)
+        except UnicodeEncodeError:
+            result_chars.append("〓")
+    return "".join(result_chars)
+
+def _ae_pad(label, width=6):
+    """副作用モニタリング項目のラベルを指定幅に全角スペースで揃える"""
+    return label + "　" * max(0, width - len(label))
+
+
+def to_half_kana(text):
 def to_half_kana(text):
     table = {
         'ア':'ｱ','イ':'ｲ','ウ':'ｳ','エ':'ｴ','オ':'ｵ',
@@ -399,33 +429,33 @@ def build_o_text(protocol_no, basic_data, drug_data, master_data,
 # ===== O欄＋Pd欄テキスト生成 =====
 
 AE_ITEMS = [
-    ("●嘔吐　　　　　　□なし　□あり　(嘔吐回数;　　　)",                       True,  None),
-    ("●悪心　　　　　　□なし　□G1　□G2　□G3",                                True,  None),
-    ("●食欲不振　　　　□なし　□G1　□G2　□G3　□G4",                          True,  None),
-    ("●便秘　　　　　　□なし　□あり　（ベースライン 回数：　　　、BS：　　　）", True,  None),
-    ("●倦怠感　　　　　□なし　□G1　□G2　□G3",                                True,  None),
+    (f"●{_ae_pad('嘔吐')}　□なし　□あり　(嘔吐回数;　　　)", True, None),
+    (f"●{_ae_pad('悪心')}　□なし　□G1　　□G2　　□G3", True, None),
+    (f"●{_ae_pad('食欲不振')}　□なし　□G1　　□G2　　□G3　　□G4", True, None),
+    (f"●{_ae_pad('便秘')}　□なし　□あり　（ベースライン 回数：、BS：）", True, None),
+    (f"●{_ae_pad('倦怠感')}　□なし　□G1　　□G2　　□G3", True, None),
     (
         "●骨髄抑制\n"
-        "　　WBC　　□なし　□G1　□G2　□G3　□G4\n"
-        "　　Neut　　□なし　□G1　□G2　□G3　□G4\n"
-        "　　Hb　　　□なし　□G1　□G2　□G3　□G4\n"
-        "　　PLT　　　□なし　□G1　□G2　□G3　□G4",
+        f"　　{_ae_pad('WBC', 5)}　□なし　□G1　　□G2　　□G3　　□G4\n"
+        f"　　{_ae_pad('Neut', 5)}　□なし　□G1　　□G2　　□G3　　□G4\n"
+        f"　　{_ae_pad('Hb', 5)}　□なし　□G1　　□G2　　□G3　　□G4\n"
+        f"　　{_ae_pad('PLT', 5)}　□なし　□G1　　□G2　　□G3　　□G4",
         True, None
     ),
-    ("●肝機能障害　　　□なし　□あり",                                          True,  None),
-    ("●腎機能障害　　　□なし　□あり",                                          True,  None),
-    ("●電解質異常　　　□なし　□あり",                                          True,  None),
-    ("●下痢　　　　　　□なし　□あり　（ベースライン 回数：　　　、BS：　　　）", False, "下痢"),
-    ("●口腔粘膜炎　　　□なし　□G1　□G2　□G3　□G4",                         False, "口腔粘膜炎"),
-    ("●脱毛　　　　　　□なし　□G1　□G2",                                     False, "脱毛"),
-    ("●末梢神経障害　　□なし　□G1　□G2　□G3　□G4",                         False, "末梢神経障害"),
-    ("●味覚異常　　　　□なし　□G1　□G2",                                     False, "味覚異常"),
-    ("●IRR　　　　　　 □なし　□あり",                                         False, "IRR"),
-    ("●手足症候群　　　□なし　□G1　□G2　□G3",                               False, "手足症候群"),
-    ("●皮膚障害　　　　□なし　□あり",                                         False, "皮膚障害"),
-    ("●間質性肺炎　　　□なし　□あり",                                         False, "間質性肺炎"),
-    ("●心障害　　　　　□なし　□あり",                                         False, "心障害"),
-    ("●その他（　　　　　　　　　　　）",                                       True,  None),
+    (f"●{_ae_pad('肝機能障害')}　□なし　□あり", True, None),
+    (f"●{_ae_pad('腎機能障害')}　□なし　□あり", True, None),
+    (f"●{_ae_pad('電解質異常')}　□なし　□あり", True, None),
+    (f"●{_ae_pad('下痢')}　□なし　□あり　（ベースライン 回数：、BS：）", False, "下痢"),
+    (f"●{_ae_pad('口腔粘膜炎')}　□なし　□G1　　□G2　　□G3　　□G4", False, "口腔粘膜炎"),
+    (f"●{_ae_pad('脱毛')}　□なし　□G1　　□G2", False, "脱毛"),
+    (f"●{_ae_pad('末梢神経障害')}　□なし　□G1　　□G2　　□G3　　□G4", False, "末梢神経障害"),
+    (f"●{_ae_pad('味覚異常')}　□なし　□G1　　□G2", False, "味覚異常"),
+    (f"●{_ae_pad('IRR')}　□なし　□あり", False, "IRR"),
+    (f"●{_ae_pad('手足症候群')}　□なし　□G1　　□G2　　□G3", False, "手足症候群"),
+    ("●皮膚障害　　　　□なし　□あり", False, "皮膚障害"),
+    ("●間質性肺炎　　　□なし　□あり", False, "間質性肺炎"),
+    ("●心障害　　　　　□なし　□あり", False, "心障害"),
+    ("●その他（　　　　　　　　　　　）", True, None),
 ]
 
 IRAE_ITEMS = [
@@ -773,6 +803,7 @@ if "p6_generated_text" in st.session_state:
     )
 
     import streamlit.components.v1 as components
+    text_for_copy = sanitize_for_sjis(text)
     copy_js = f"""
     <button
         onclick="
@@ -795,7 +826,7 @@ if "p6_generated_text" in st.session_state:
             margin-bottom: 8px;
         "
     >📋 全文をコピーする</button>
-    <pre id="copy_target" style="display:none;">{text}</pre>
+    <pre id="copy_target" style="display:none;">{text_for_copy}</pre>
     """
     components.html(copy_js, height=60)
 
