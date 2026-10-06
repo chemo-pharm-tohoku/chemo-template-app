@@ -218,9 +218,6 @@ with st.container(border=True):
         else:
             st.caption(f"⚠️ {label}（未配置：manuals/{prefix}*.pdf）")
 st.divider()
-        else:
-            st.caption(f"⚠️ {label}（未配置：manuals/{prefix}*.pdf）")
-st.divider()
 
 # ===== システム改善要望 =====
 st.subheader("📝 システム改善要望")
