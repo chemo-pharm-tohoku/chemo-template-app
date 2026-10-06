@@ -1129,6 +1129,31 @@ if "extracted_parsed" in st.session_state:
                 )
                 st.rerun()
 
+    # ===== カルボプラチン婦人科AUC=6特例の確認 =====
+    has_auc_drug = any(
+        str(d.get("dosage_basis", "")).strip() == "AUC依存"
+        for d in drug_list
+    )
+    if has_auc_drug:
+        st.divider()
+        st.markdown("#### 💊 カルボプラチン特例の確認")
+        cbdca_special_default = str(parsed.get("cbdca_special_flag", "")).strip() == "○"
+        cbdca_special = st.checkbox(
+            "婦人科のAUC=6のTC・DC療法ですか？（該当する場合はチェック）",
+            value=cbdca_special_default,
+            key="cbdca_special_checkbox",
+            help=(
+                "チェックすると、テンプレートの確認項目欄に"
+                "「血清Cr0.7未満は切り上げ」「BMI25以上は体重補正」"
+                "「最大投与量900mg/body」の注記が追加されます。"
+            ),
+        )
+        parsed["cbdca_special_flag"] = "○" if cbdca_special else ""
+        st.session_state["extracted_parsed"] = parsed
+        st.session_state["extracted_json"] = json.dumps(
+            parsed, ensure_ascii=False, indent=2
+        )
+
     st.markdown("#### 💊 薬剤情報")
     if drug_list:
         import pandas as pd
