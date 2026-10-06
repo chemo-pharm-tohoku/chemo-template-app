@@ -167,7 +167,16 @@ def apply_master_matching(parsed, master_data):
     Gemini抽出直後のJSONに対し、drug_info各要素のproduct_name
     を薬品マスタと部分一致で検索し、management_code・product_name
     （統一名称）を確定する。
+    さらに、確定したmanagement_codeの薬品マスタ「薬剤区分」を正として、
+    ①O欄_抗がん剤／①O欄_支持療法フラグをAIの判定より優先して補正する。
+    （AIは薬品マスタを見ずに医学知識のみで判定しているため、
+      支持療法薬が誤って抗がん剤と判定されるケースがあるための対策）
     """
+    master_dict = {
+        str(m.get("管理コード", "")).strip(): m
+        for m in master_data
+    }
+
     drugs = parsed.get("drug_info") or parsed.get("drugs") or []
     for drug in drugs:
         raw_name = str(drug.get("product_name") or drug.get("brand_name") or "").strip()
@@ -178,6 +187,20 @@ def apply_master_matching(parsed, master_data):
         drug["product_name"]    = result["product_name"]
         if not result["matched"] and result["candidates"]:
             drug["_match_candidates"] = result["candidates"]
+
+        # ── 薬品マスタの薬剤区分を正としてフラグを補正 ──
+        code = str(result["management_code"] or "").strip()
+        master_row = master_dict.get(code)
+        if master_row:
+            kubun = str(master_row.get("薬剤区分", "")).strip()
+            if kubun == "抗がん剤":
+                drug["anticancer_flag"] = "○"
+                drug["support_flag"]    = ""
+            elif kubun in ("支持療法_注射", "支持療法_内服"):
+                drug["anticancer_flag"] = ""
+                drug["support_flag"]    = "○"
+            # それ以外（輸液等）はAIの判定をそのまま維持
+
     if "drug_info" in parsed:
         parsed["drug_info"] = drugs
     else:
