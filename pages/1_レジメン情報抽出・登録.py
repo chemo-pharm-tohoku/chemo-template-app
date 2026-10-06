@@ -1202,10 +1202,7 @@ if "extracted_parsed" in st.session_state:
             parsed, ensure_ascii=False, indent=2
         )
 
-    st.markdown("#### 💊 薬剤情報")
-    if drug_list:
-        import pandas as pd
-        st.dataframe(pd.DataFrame(drug_list), use_container_width=True)
+
 
     st.markdown("#### 💊 薬剤情報")
     if drug_list:
@@ -1348,13 +1345,7 @@ if "extracted_parsed" in st.session_state and not st.session_state.get("register
                 except Exception as e:
                     st.error(f"❌ 登録エラー: {e}")
 
-elif st.session_state.get("registered"):
-    st.success(f"✅ {st.session_state.get('registered_protocol','')} 登録済み")
-    st.markdown(f"### 📊 [スプレッドシートを開く]({st.secrets['spreadsheet']['url']})")
-    st.info(
-        "「要確認」となっている項目があれば、スプレッドシートの「薬剤情報」シートを開いて"
-        "直接修正してください（管理コード・投与量・投与時間等）。"
-    )
+
 
     # ===== 抗がん剤副作用マスタ 登録状況（このレジメンの抗がん剤） =====
     st.divider()
